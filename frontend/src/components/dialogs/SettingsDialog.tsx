@@ -654,7 +654,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                   </div>
                   <div>
                     <h2 className="font-bold text-base text-white">NST Ghost - Novelty Translation Tool</h2>
-                    <p className="text-xs text-[#888888]">Version 2.0.0 (Go Edition)</p>
+                    <p className="text-xs text-[#888888]">Version 2.1.0 (Go Edition)</p>
                   </div>
                 </div>
 

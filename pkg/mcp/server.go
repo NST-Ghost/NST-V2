@@ -125,7 +125,7 @@ func (s *Server) HandleRequest(ctx context.Context, req *RPCRequest) *RPCRespons
 				"protocolVersion": "2024-11-05",
 				"serverInfo": map[string]string{
 					"name":    "nst-server",
-					"version": "2.0.0-go",
+					"version": "2.1.0-go",
 				},
 				"capabilities": map[string]interface{}{
 					"tools": map[string]interface{}{},

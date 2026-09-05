@@ -20,7 +20,7 @@ import (
 	"nst-go/pkg/webui"
 )
 
-var version = "2.0.0-alpha (Go Pure Cross-Platform)"
+var version = "2.1.0 (Go Pure Cross-Platform)"
 
 func main() {
 	// Enforce 64 MiB soft memory ceiling on Go runtime to prevent heap ballooning

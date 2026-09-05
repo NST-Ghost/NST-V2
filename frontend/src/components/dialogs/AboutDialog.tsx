@@ -38,7 +38,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
               <h2 className="font-bold text-sm text-white">
                 Novelty Translation Tool (Go Edition)
               </h2>
-              <p className="text-[11px] text-[#888888]">Version 2.0.0-alpha · Wails v3 Desktop</p>
+              <p className="text-[11px] text-[#888888]">Version 2.1.0 · Wails v3 Desktop</p>
             </div>
           </div>
 
