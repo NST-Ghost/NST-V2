@@ -1,0 +1,41 @@
+# Binaries and build artifacts
+/bin/
+/dist/
+/nst
+/nst-desktop
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# SQLite & Runtime data
+*.nst
+*.db
+*.sqlite
+workspace.nst
+demo.nst
+test_game_translated/
+
+# Node & Frontend dependencies
+frontend/node_modules/
+frontend/.vite/
+frontend/.vite-temp/
+frontend/package-lock.json.bak
+
+# Wails & Task cache
+.task/
+.pkgconfig/
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# Logs and environment
+*.log
+.env
+.env.local

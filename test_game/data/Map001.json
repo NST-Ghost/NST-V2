@@ -1,0 +1,20 @@
+{
+  "displayName": "Cross-Platform Village",
+  "events": [
+    null,
+    {
+      "id": 1,
+      "name": "NPC",
+      "pages": [
+        {
+          "list": [
+            { "code": 101, "parameters": ["", 0, 0, 2, "Elder"] },
+            { "code": 401, "parameters": ["Welcome to Go! Everything is fast here, \\N[1]."] },
+            { "code": 102, "parameters": [["I am ready!", "Tell me more."]] },
+            { "code": 0, "parameters": [] }
+          ]
+        }
+      ]
+    }
+  ]
+}

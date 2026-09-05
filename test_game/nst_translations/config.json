@@ -1,0 +1,74 @@
+{
+  "__controlCharPatterns__": [
+    "\\\\[VNP]\\[\\d+\\]",
+    "\\\\I\\[\\d+\\]",
+    "\\\\C\\[\\d+\\]",
+    "\\\\G",
+    "\\\\[{}]",
+    "\\\\\\$",
+    "\\\\[.|]",
+    "\\\\!",
+    "\\\\[\u003e\u003c]",
+    "\\\\\\\\\\^",
+    "\\\\\\\\\\\\\\\\",
+    "\\\\FS\\[\\d+\\]",
+    "\\\\P[XY]\\[-?\\d+\\]",
+    "\\\\[OT]C\\[\\d+\\]",
+    "\\\\(?:MSGCORE|MSGSND)\\[[^\\]]*\\]"
+  ],
+  "__fontConfig__": {
+    "fontName": "NotoSans",
+    "fontUrl": "fonts/NotoSans-Regular.woff2",
+    "maxSizeOffset": 0,
+    "offsetSize": 0
+  },
+  "__ignorePatterns__": [
+    "^.$",
+    "^\\s*$",
+    "^[\\d\\s.,\\-+%$!/\\\\:;()[\\]{}=*#@!?\u003c\u003e~`'\\\"^\u0026|_]+$",
+    "^\\d+$",
+    "\\.(png|jpe?g|gif|bmp|webp|svg|ico)$",
+    "\\.(ogg|m4a|mp3|wav|flac|aac|wma)$",
+    "^https?://",
+    "^data:"
+  ],
+  "__languageName__": "Thai",
+  "__sourceLocale__": "ja",
+  "__textCommands__": {
+    "101": [
+      4
+    ],
+    "102": [
+      0
+    ],
+    "320": [
+      1
+    ],
+    "324": [
+      1
+    ],
+    "325": [
+      1
+    ],
+    "402": [
+      1
+    ],
+    "405": [
+      0
+    ]
+  },
+  "__textFields__": [
+    "name",
+    "description",
+    "displayName",
+    "nickname",
+    "profile",
+    "message1",
+    "message2",
+    "message3",
+    "message4",
+    "gameTitle",
+    "terms",
+    "messages"
+  ]
+}

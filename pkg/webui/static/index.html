@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NST Ghost - Novelty Translation Tool</title>
+  <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #1a1a1a;
+      --bg-light: #2b2b2b;
+      --bg-dark: #0d0d0d;
+      --fg: #cccccc;
+      --fg-dim: #999999;
+      --accent: #3399ff;
+      --accent-hover: #4da6ff;
+      --accent-pressed: #2680d9;
+      --accent-success: #4CAF50;
+      --accent-warning: #FFC107;
+      --accent-danger: #F44336;
+      --border: #3a3a3a;
+      --border-light: #4a4a4a;
+      --separator: #252525;
+      --row-alt: #222222;
+      --row-selected: #1b385c;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+      font-size: 13px;
+      background-color: var(--bg);
+      color: var(--fg);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* 1. Top Menu Bar (Qt style) */
+    .menubar {
+      background-color: var(--bg-light);
+      border-bottom: 1px solid var(--separator);
+      display: flex;
+      align-items: center;
+      padding: 0 4px;
+      height: 28px;
+    }
+    .menu-item {
+      padding: 4px 10px;
+      cursor: pointer;
+      color: var(--fg);
+      border-radius: 3px;
+      font-size: 12px;
+      position: relative;
+    }
+    .menu-item:hover {
+      background-color: var(--accent);
+      color: #ffffff;
+    }
+    .dropdown {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background: var(--bg-light);
+      border: 1px solid var(--border);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      border-radius: 4px;
+      min-width: 200px;
+      z-index: 1000;
+      padding: 4px 0;
+    }
+    .menu-item:hover .dropdown { display: block; }
+    .dropdown-item {
+      padding: 6px 14px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--fg);
+      font-size: 12px;
+    }
+    .dropdown-item:hover {
+      background-color: var(--accent);
+      color: #fff;
+    }
+    .dropdown-sep {
+      height: 1px;
+      background: var(--separator);
+      margin: 4px 0;
+    }
+
+    /* 2. Main Tool Bar */
+    .toolbar {
+      background-color: #242424;
+      border-bottom: 1px solid var(--border);
+      padding: 4px 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 38px;
+    }
+    .tool-btn {
+      background: #2e2e2e;
+      border: 1px solid var(--border);
+      color: var(--fg);
+      padding: 4px 10px;
+      border-radius: 3px;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 500;
+    }
+    .tool-btn:hover {
+      background: #3a3a3a;
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .tool-btn-primary {
+      background: #1e3a5f;
+      border-color: var(--accent);
+      color: #8ac4ff;
+    }
+    .tool-btn-primary:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+    .tool-sep {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+      margin: 0 4px;
+    }
+    .search-box {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 2px 6px;
+    }
+    .search-box input {
+      background: transparent;
+      border: none;
+      color: var(--fg);
+      font-size: 12px;
+      outline: none;
+      width: 220px;
+    }
+
+    /* 3. Main Workspace Splitter (Left: File List, Right: Translation Table) */
+    .workspace {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* Left Sidebar: File List */
+    .file-panel {
+      width: 260px;
+      background-color: #1e1e1e;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+    .panel-header {
+      background-color: var(--bg-light);
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--fg-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--separator);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .file-list {
+      flex: 1;
+      overflow-y: auto;
+      list-style: none;
+    }
+    .file-item {
+      padding: 7px 10px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #242424;
+      font-size: 12px;
+    }
+    .file-item:hover {
+      background-color: #282828;
+    }
+    .file-item.active {
+      background-color: var(--row-selected);
+      color: #fff;
+      border-left: 3px solid var(--accent);
+    }
+    .file-badge {
+      font-size: 11px;
+      background: #141414;
+      padding: 1px 6px;
+      border-radius: 10px;
+      color: var(--fg-dim);
+      border: 1px solid var(--border);
+    }
+
+    /* Right Main Panel: Translation Table */
+    .table-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: var(--bg);
+      overflow: hidden;
+    }
+    .table-container {
+      flex: 1;
+      overflow: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    thead {
+      position: sticky;
+      top: 0;
+      background-color: var(--bg-light);
+      border-bottom: 1px solid var(--border);
+      z-index: 10;
+    }
+    th {
+      padding: 7px 10px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--fg-dim);
+      border-right: 1px solid var(--separator);
+      text-transform: uppercase;
+    }
+    td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--separator);
+      border-right: 1px solid var(--separator);
+      vertical-align: top;
+      font-size: 13px;
+      line-height: 1.4;
+      user-select: text;
+    }
+    tbody tr:nth-child(even) {
+      background-color: var(--row-alt);
+    }
+    tbody tr:hover {
+      background-color: #292929;
+    }
+    tbody tr.selected {
+      background-color: var(--row-selected);
+    }
+    .tag-token {
+      background: #1e3a5f;
+      color: #79b8ff;
+      padding: 1px 4px;
+      border-radius: 2px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+    }
+    .target-cell-editor {
+      width: 100%;
+      background: transparent;
+      border: 1px solid transparent;
+      color: #fff;
+      font-family: inherit;
+      font-size: 13px;
+      padding: 2px 4px;
+      border-radius: 2px;
+      outline: none;
+      resize: vertical;
+      min-height: 24px;
+    }
+    .target-cell-editor:focus {
+      background: #111;
+      border-color: var(--accent);
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 4px;
+    }
+    .dot-untranslated { background-color: var(--accent-danger); }
+    .dot-translated { background-color: var(--accent-success); }
+
+    /* 4. Bottom Detail View / Context Box */
+    .detail-panel {
+      height: 140px;
+      background-color: #181818;
+      border-top: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      padding: 8px;
+      gap: 8px;
+    }
+    .detail-box {
+      display: flex;
+      flex-direction: column;
+      background: #121212;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px;
+    }
+    .detail-box label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--fg-dim);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .detail-box textarea {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+      resize: none;
+    }
+
+    /* 5. Status Bar */
+    .statusbar {
+      background-color: #141414;
+      border-top: 1px solid var(--separator);
+      height: 24px;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      font-size: 11px;
+      color: var(--fg-dim);
+      gap: 16px;
+    }
+    .status-item { display: flex; align-items: center; gap: 6px; }
+    .status-progress-bar {
+      width: 140px;
+      height: 10px;
+      background: #252525;
+      border-radius: 5px;
+      overflow: hidden;
+      display: none;
+    }
+    .status-progress-fill {
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width 0.2s;
+    }
+
+    /* Modal Dialogs */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.65);
+      z-index: 2000;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-box {
+      background: var(--bg-light);
+      border: 1px solid var(--border-light);
+      border-radius: 6px;
+      width: 480px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.8);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-header {
+      background: #222;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 13px;
+      color: #fff;
+      display: flex;
+      justify-content: space-between;
+    }
+    .modal-body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .modal-footer {
+      background: #222;
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .modal-form-group label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--fg-dim);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+    .modal-form-group input, .modal-form-group select {
+      width: 100%;
+      background: #111;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 6px 8px;
+      color: #fff;
+      font-size: 12px;
+      outline: none;
+    }
+    .modal-form-group input:focus, .modal-form-group select:focus {
+      border-color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Menu Bar (Qt style) -->
+  <div class="menubar">
+    <div class="menu-item">
+      File
+      <div class="dropdown">
+        <div class="dropdown-item" onclick="openProjectDialog()">Open Game Project...</div>
+        <div class="dropdown-item" onclick="saveWorkspace()">Save Workspace</div>
+        <div class="dropdown-sep"></div>
+        <div class="dropdown-item" onclick="openDeployDialog()">Deploy / Export Game...</div>
+        <div class="dropdown-sep"></div>
+        <div class="dropdown-item" onclick="window.close()">Exit</div>
+      </div>
+    </div>
+    <div class="menu-item">
+      Translate
+      <div class="dropdown">
+        <div class="dropdown-item" onclick="openTranslateDialog()">Batch Translate File / Project...</div>
+        <div class="dropdown-item" onclick="translateSelectedRow()">Translate Selected Row</div>
+        <div class="dropdown-sep"></div>
+        <div class="dropdown-item" onclick="openSettingsDialog()">Translation Settings...</div>
+      </div>
+    </div>
+    <div class="menu-item">
+      View
+      <div class="dropdown">
+        <div class="dropdown-item" onclick="setFilter('all')">Show All</div>
+        <div class="dropdown-item" onclick="setFilter('untranslated')">Show Untranslated Only</div>
+        <div class="dropdown-item" onclick="setFilter('translated')">Show Translated Only</div>
+      </div>
+    </div>
+    <div class="menu-item">
+      Help
+      <div class="dropdown">
+        <div class="dropdown-item" onclick="alert('NST Ghost (Go Edition)\n100% Cross-Platform Remake\nVersion: 2.0.0')">About NST Ghost</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Tool Bar -->
+  <div class="toolbar">
+    <button class="tool-btn" onclick="openProjectDialog()">
+      📁 Open Project
+    </button>
+    <button class="tool-btn" onclick="saveWorkspace()">
+      💾 Save
+    </button>
+    <div class="tool-sep"></div>
+    <button class="tool-btn tool-btn-primary" onclick="openTranslateDialog()">
+      ⚡ Translate
+    </button>
+    <button class="tool-btn" onclick="openDeployDialog()">
+      🚀 Deploy
+    </button>
+    <div class="tool-sep"></div>
+    <button class="tool-btn" onclick="openSettingsDialog()">
+      ⚙️ Settings
+    </button>
+
+    <div class="search-box">
+      <span style="color: var(--fg-dim); margin-right: 4px;">🔍</span>
+      <input type="text" id="filter-input" placeholder="Search (Source / Target)..." oninput="applyFilter()">
+    </div>
+  </div>
+
+  <!-- Main Workspace (File list on left, Translation table on right) -->
+  <div class="workspace">
+    <!-- Left: Files Panel -->
+    <div class="file-panel">
+      <div class="panel-header">
+        <span>Files</span>
+        <span id="file-total-count" class="file-badge">0</span>
+      </div>
+      <ul class="file-list" id="file-list-view">
+        <li class="file-item active" onclick="selectFile('all', this)">
+          <span>All Files</span>
+          <span class="file-badge" id="badge-all">0</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Right: Table & Detail -->
+    <div class="table-panel">
+      <div class="table-container" id="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 45px; text-align: center;">#</th>
+              <th style="width: 140px;">Key</th>
+              <th style="width: 42%;">Original (Source)</th>
+              <th style="width: 42%;">Translation (Target)</th>
+            </tr>
+          </thead>
+          <tbody id="table-body">
+            <tr>
+              <td colspan="4" style="text-align: center; color: var(--fg-dim); padding: 4rem;">
+                No project loaded. Click <strong>"Open Project"</strong> on the toolbar to begin.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Bottom Detail View / Edit Context -->
+      <div class="detail-panel">
+        <div class="detail-box">
+          <label>Original Source Text</label>
+          <textarea id="detail-source" readonly></textarea>
+        </div>
+        <div class="detail-box">
+          <label>Translated Target Text (Edit & Press Enter to Save)</label>
+          <textarea id="detail-target" oninput="syncDetailEdit()"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="statusbar">
+    <div class="status-item">
+      <span class="status-dot dot-translated"></span>
+      <span id="status-text">Ready</span>
+    </div>
+    <div class="status-item" style="margin-left: auto;">
+      <span>File: <strong id="sb-file" style="color: #fff;">All Files</strong></span>
+    </div>
+    <div class="status-item">
+      <span>Total: <strong id="sb-total" style="color: #fff;">0</strong></span>
+    </div>
+    <div class="status-item">
+      <span>Translated: <strong id="sb-translated" style="color: #4CAF50;">0</strong></span>
+    </div>
+    <div class="status-progress-bar" id="sb-prog-bar">
+      <div class="status-progress-fill" id="sb-prog-fill"></div>
+    </div>
+    <div class="status-item" id="sb-prog-pct" style="display: none;">0%</div>
+  </div>
+
+  <!-- Dialog 1: Open Game Project -->
+  <div class="modal-overlay" id="modal-open">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>Load from Game Project</span>
+        <span style="cursor: pointer;" onclick="closeModal('modal-open')">✕</span>
+      </div>
+      <div class="modal-body">
+        <div class="modal-form-group">
+          <label>Game Directory Path</label>
+          <input type="text" id="dlg-game-path" value="./test_game" placeholder="/path/to/game">
+        </div>
+        <div class="modal-form-group">
+          <label>Workspace File (.nst)</label>
+          <input type="text" id="dlg-ws-path" value="workspace.nst">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <div class="modal-form-group">
+            <label>Source Language</label>
+            <input type="text" id="dlg-src-lang" value="Japanese">
+          </div>
+          <div class="modal-form-group">
+            <label>Target Language</label>
+            <input type="text" id="dlg-tgt-lang" value="Thai">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="tool-btn" onclick="closeModal('modal-open')">Cancel</button>
+        <button class="tool-btn tool-btn-primary" onclick="confirmOpenProject()">Load Project</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dialog 2: Translate -->
+  <div class="modal-overlay" id="modal-translate">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>Translate Project</span>
+        <span style="cursor: pointer;" onclick="closeModal('modal-translate')">✕</span>
+      </div>
+      <div class="modal-body">
+        <div class="modal-form-group">
+          <label>Translation Provider</label>
+          <select id="dlg-provider" onchange="toggleDlgProvider()">
+            <option value="mock">Mock Service (Instant Test)</option>
+            <option value="gemini">Google Gemini API</option>
+            <option value="openai">OpenAI / Local Ollama</option>
+          </select>
+        </div>
+        <div class="modal-form-group" id="dlg-key-group" style="display: none;">
+          <label>API Key</label>
+          <input type="password" id="dlg-api-key" placeholder="Enter API Key">
+        </div>
+        <div class="modal-form-group" id="dlg-model-group" style="display: none;">
+          <label>Model Name</label>
+          <input type="text" id="dlg-model" placeholder="gemini-2.5-flash">
+        </div>
+        <div class="modal-form-group" id="dlg-baseurl-group" style="display: none;">
+          <label>Base URL (for Ollama / Local LLM)</label>
+          <input type="text" id="dlg-baseurl" placeholder="http://localhost:11434/v1">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="tool-btn" onclick="closeModal('modal-translate')">Cancel</button>
+        <button class="tool-btn tool-btn-primary" onclick="confirmTranslate()">Start Translation</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dialog 3: Deploy -->
+  <div class="modal-overlay" id="modal-deploy">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>Deploy / Export Game</span>
+        <span style="cursor: pointer;" onclick="closeModal('modal-deploy')">✕</span>
+      </div>
+      <div class="modal-body">
+        <div class="modal-form-group">
+          <label>Target Export Directory</label>
+          <input type="text" id="dlg-dest-path" value="./test_game_translated">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="tool-btn" onclick="closeModal('modal-deploy')">Cancel</button>
+        <button class="tool-btn tool-btn-primary" onclick="confirmDeploy()">Deploy Game</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dialog 4: Settings -->
+  <div class="modal-overlay" id="modal-settings">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>Settings</span>
+        <span style="cursor: pointer;" onclick="closeModal('modal-settings')">✕</span>
+      </div>
+      <div class="modal-body">
+        <div class="modal-form-group">
+          <label>Default Gemini API Key</label>
+          <input type="password" id="set-gemini-key">
+        </div>
+        <div class="modal-form-group">
+          <label>Default OpenAI API Key</label>
+          <input type="password" id="set-openai-key">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="tool-btn tool-btn-primary" onclick="closeModal('modal-settings')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allEntries = [];
+    let currentFileFilter = 'all';
+    let currentStatusFilter = 'all';
+    let selectedEntryId = null;
+    let pollTimer = null;
+
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    function openProjectDialog() { openModal('modal-open'); }
+    function openTranslateDialog() { openModal('modal-translate'); }
+    function openDeployDialog() { openModal('modal-deploy'); }
+    function openSettingsDialog() { openModal('modal-settings'); }
+
+    function toggleDlgProvider() {
+      const p = document.getElementById('dlg-provider').value;
+      document.getElementById('dlg-key-group').style.display = (p !== 'mock') ? 'block' : 'none';
+      document.getElementById('dlg-model-group').style.display = (p !== 'mock') ? 'block' : 'none';
+      document.getElementById('dlg-baseurl-group').style.display = (p === 'openai') ? 'block' : 'none';
+      if (p === 'gemini') document.getElementById('dlg-model').value = 'gemini-2.5-flash';
+      if (p === 'openai') document.getElementById('dlg-model').value = 'gpt-4o-mini';
+    }
+
+    async function loadData() {
+      const ws = document.getElementById('dlg-ws-path').value;
+      try {
+        const res = await fetch(`/api/entries?workspace=${encodeURIComponent(ws)}&status=all`);
+        const data = await res.json();
+        allEntries = data.entries || [];
+        updateFileList();
+        renderTable();
+        updateStatusBar();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function updateFileList() {
+      const filesMap = {};
+      allEntries.forEach(e => {
+        filesMap[e.file_path] = (filesMap[e.file_path] || 0) + 1;
+      });
+
+      const fileList = document.getElementById('file-list-view');
+      fileList.innerHTML = `
+        <li class="file-item ${currentFileFilter === 'all' ? 'active' : ''}" onclick="selectFile('all', this)">
+          <span>All Files</span>
+          <span class="file-badge">${allEntries.length}</span>
+        </li>
+      `;
+
+      Object.keys(filesMap).sort().forEach(f => {
+        const li = document.createElement('li');
+        li.className = `file-item ${currentFileFilter === f ? 'active' : ''}`;
+        li.onclick = () => selectFile(f, li);
+        li.innerHTML = `
+          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px;">${f}</span>
+          <span class="file-badge">${filesMap[f]}</span>
+        `;
+        fileList.appendChild(li);
+      });
+
+      document.getElementById('file-total-count').textContent = Object.keys(filesMap).length;
+    }
+
+    function selectFile(filename, el) {
+      currentFileFilter = filename;
+      document.querySelectorAll('.file-item').forEach(i => i.classList.remove('active'));
+      if (el) el.classList.add('active');
+      document.getElementById('sb-file').textContent = filename;
+      renderTable();
+    }
+
+    function highlightEscapeTags(text) {
+      if (!text) return '';
+      return text.replace(/(\\\\[a-zA-Z]+(?:\[\d+\])?|\\[a-zA-Z]+(?:\[\d+\])?|__NST_TAG_\d+__)/g, '<span class="tag-token">$1</span>');
+    }
+
+    const ROW_HEIGHT = 44;
+    let currentFiltered = [];
+    let isScrollingScheduled = false;
+
+    function renderTable() {
+      const search = document.getElementById('filter-input').value.toLowerCase();
+
+      currentFiltered = allEntries.filter(e => {
+        if (currentFileFilter !== 'all' && e.file_path !== currentFileFilter) return false;
+        if (currentStatusFilter === 'untranslated' && e.status !== 'untranslated') return false;
+        if (currentStatusFilter === 'translated' && e.status === 'untranslated') return false;
+        if (search) {
+          return (e.source && e.source.toLowerCase().includes(search)) ||
+                 (e.target && e.target.toLowerCase().includes(search)) ||
+                 (e.key_path && e.key_path.toLowerCase().includes(search));
+        }
+        return true;
+      });
+
+      renderVirtualRows();
+    }
+
+    function renderVirtualRows() {
+      const tbody = document.getElementById('table-body');
+      const container = document.getElementById('table-container');
+
+      if (currentFiltered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--fg-dim); padding: 3rem;">No entries found</td></tr>';
+        return;
+      }
+
+      const scrollTop = container ? container.scrollTop : 0;
+      const viewportHeight = (container && container.clientHeight) ? container.clientHeight : 600;
+
+      const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 5);
+      const endIndex = Math.min(currentFiltered.length, Math.ceil((scrollTop + viewportHeight) / ROW_HEIGHT) + 5);
+
+      const topSpacerHeight = startIndex * ROW_HEIGHT;
+      const bottomSpacerHeight = (currentFiltered.length - endIndex) * ROW_HEIGHT;
+
+      let html = '';
+      if (topSpacerHeight > 0) {
+        html += `<tr style="height: ${topSpacerHeight}px;"><td colspan="4" style="padding:0; border:none;"></td></tr>`;
+      }
+
+      for (let idx = startIndex; idx < endIndex; idx++) {
+        const e = currentFiltered[idx];
+        const isDone = (e.target && e.status !== 'untranslated');
+        const dotClass = isDone ? 'dot-translated' : 'dot-untranslated';
+        const isSelected = e.id === selectedEntryId;
+
+        html += `
+          <tr class="${isSelected ? 'selected' : ''}" onclick="selectRow('${e.id}')" style="height: ${ROW_HEIGHT}px;">
+            <td style="text-align: center; color: var(--fg-dim); font-size: 11px;">
+              <span class="status-dot ${dotClass}"></span>${idx + 1}
+            </td>
+            <td style="font-family: monospace; font-size: 11px; color: #79b8ff;">
+              ${e.key_path}
+            </td>
+            <td>${highlightEscapeTags(e.source)}</td>
+            <td>
+              <textarea class="target-cell-editor" id="cell-${e.id}" onchange="saveCell('${e.id}', this.value)">${e.target || ''}</textarea>
+            </td>
+          </tr>
+        `;
+      }
+
+      if (bottomSpacerHeight > 0) {
+        html += `<tr style="height: ${bottomSpacerHeight}px;"><td colspan="4" style="padding:0; border:none;"></td></tr>`;
+      }
+
+      tbody.innerHTML = html;
+    }
+
+    function selectRow(id) {
+      selectedEntryId = id;
+      const entry = allEntries.find(e => e.id === id);
+      if (entry) {
+        document.getElementById('detail-source').value = entry.source || '';
+        document.getElementById('detail-target').value = entry.target || '';
+      }
+      renderTable();
+    }
+
+    async function saveCell(id, newVal) {
+      const entry = allEntries.find(e => e.id === id);
+      if (entry) {
+        entry.target = newVal;
+        entry.status = newVal ? 'translated' : 'untranslated';
+      }
+      const ws = document.getElementById('dlg-ws-path').value;
+      await fetch('/api/entries/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace: ws, id: id, target: newVal })
+      });
+      updateStatusBar();
+    }
+
+    function syncDetailEdit() {
+      if (!selectedEntryId) return;
+      const val = document.getElementById('detail-target').value;
+      saveCell(selectedEntryId, val);
+      const cell = document.getElementById(`cell-${selectedEntryId}`);
+      if (cell) cell.value = val;
+    }
+
+    function applyFilter() {
+      renderTable();
+    }
+
+    function setFilter(status) {
+      currentStatusFilter = status;
+      renderTable();
+    }
+
+    function updateStatusBar() {
+      const total = allEntries.length;
+      const done = allEntries.filter(e => e.target && e.status !== 'untranslated').length;
+      document.getElementById('sb-total').textContent = total;
+      document.getElementById('sb-translated').textContent = done;
+    }
+
+    async function confirmOpenProject() {
+      closeModal('modal-open');
+      document.getElementById('status-text').textContent = 'Scanning project...';
+
+      const payload = {
+        game_path: document.getElementById('dlg-game-path').value,
+        workspace: document.getElementById('dlg-ws-path').value,
+        source_lang: document.getElementById('dlg-src-lang').value,
+        target_lang: document.getElementById('dlg-tgt-lang').value
+      };
+
+      try {
+        const res = await fetch('/api/project/extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          document.getElementById('status-text').textContent = `Loaded ${data.stats.total_entries} entries`;
+          await loadData();
+        } else {
+          alert('Error: ' + (data.error || 'Failed to extract'));
+        }
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function confirmTranslate() {
+      closeModal('modal-translate');
+      document.getElementById('status-text').textContent = 'Translating...';
+      document.getElementById('sb-prog-bar').style.display = 'block';
+      document.getElementById('sb-prog-pct').style.display = 'block';
+
+      const payload = {
+        workspace: document.getElementById('dlg-ws-path').value,
+        provider: document.getElementById('dlg-provider').value,
+        api_key: document.getElementById('dlg-api-key').value,
+        model: document.getElementById('dlg-model').value,
+        base_url: document.getElementById('dlg-baseurl').value,
+        source_lang: document.getElementById('dlg-src-lang').value,
+        target_lang: document.getElementById('dlg-tgt-lang').value
+      };
+
+      try {
+        const res = await fetch('/api/translate/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+          const d = await res.json();
+          alert('Error: ' + d.error);
+          return;
+        }
+
+        pollTimer = setInterval(pollProgress, 600);
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function pollProgress() {
+      const res = await fetch('/api/translate/progress');
+      const data = await res.json();
+
+      const pct = (data.percent || 0).toFixed(0);
+      document.getElementById('sb-prog-fill').style.width = pct + '%';
+      document.getElementById('sb-prog-pct').textContent = pct + '%';
+      document.getElementById('status-text').textContent = `Translating: ${data.current_file || ''}`;
+
+      if (!data.running) {
+        clearInterval(pollTimer);
+        document.getElementById('sb-prog-bar').style.display = 'none';
+        document.getElementById('sb-prog-pct').style.display = 'none';
+        document.getElementById('status-text').textContent = 'Translation Finished';
+        await loadData();
+      }
+    }
+
+    async function confirmDeploy() {
+      closeModal('modal-deploy');
+      document.getElementById('status-text').textContent = 'Deploying game...';
+
+      const payload = {
+        game_path: document.getElementById('dlg-game-path').value,
+        workspace: document.getElementById('dlg-ws-path').value,
+        dest_path: document.getElementById('dlg-dest-path').value
+      };
+
+      try {
+        const res = await fetch('/api/inject', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          document.getElementById('status-text').textContent = 'Deploy Complete!';
+          alert('Game exported successfully to ' + payload.dest_path);
+        } else {
+          const d = await res.json();
+          alert('Deploy failed: ' + d.error);
+        }
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function saveWorkspace() {
+      alert('Workspace autosaved to ' + document.getElementById('dlg-ws-path').value);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadData();
+
+      const container = document.getElementById('table-container');
+      if (container) {
+        container.addEventListener('scroll', () => {
+          if (!isScrollingScheduled) {
+            isScrollingScheduled = true;
+            requestAnimationFrame(() => {
+              renderVirtualRows();
+              isScrollingScheduled = false;
+            });
+          }
+        });
+      }
+    });
+  </script>
+</body>
+</html>

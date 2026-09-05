@@ -1,0 +1,188 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"nst-go/pkg/app"
+	"nst-go/pkg/storage"
+)
+
+func TestDesktopServices(t *testing.T) {
+	tempDir := t.TempDir()
+	tempRegPath := filepath.Join(tempDir, "projects.json")
+	tempSettingsPath := filepath.Join(tempDir, "settings.json")
+	tempWsPath := filepath.Join(tempDir, "test_project.nst")
+
+	session := NewSession()
+	projectSvc := NewProjectService(session, tempRegPath)
+	entrySvc := NewEntryService(session)
+	transSvc := NewTranslationService(session)
+	deploySvc := NewDeployService(session)
+	settingsSvc := NewSettingsService(tempSettingsPath)
+
+	// 1. Test SettingsService
+	settings, err := settingsSvc.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings failed: %v", err)
+	}
+	if settings.DefaultProvider != "mock" {
+		t.Errorf("Expected default provider 'mock', got %s", settings.DefaultProvider)
+	}
+
+	settings.DefaultModel = "gpt-4o-custom"
+	settings.GeminiAPIKey = "test-api-key-123"
+	if err := settingsSvc.SaveSettings(settings); err != nil {
+		t.Fatalf("SaveSettings failed: %v", err)
+	}
+
+	savedSettings, err := settingsSvc.GetSettings()
+	if err != nil {
+		t.Fatalf("Re-read settings failed: %v", err)
+	}
+	if savedSettings.GeminiAPIKey != "test-api-key-123" {
+		t.Errorf("Expected saved API key 'test-api-key-123', got '%s'", savedSettings.GeminiAPIKey)
+	}
+
+	// 2. Test DetectEngine
+	gameDir := filepath.Join("..", "..", "test_game")
+	engineName, err := projectSvc.DetectEngine(gameDir)
+	if err != nil {
+		t.Fatalf("DetectEngine failed: %v", err)
+	}
+	if engineName != "rpgm" {
+		t.Errorf("Expected engine 'rpgm', got '%s'", engineName)
+	}
+
+	// 3. Test CreateFromGame
+	stats, err := projectSvc.CreateFromGame(gameDir, tempWsPath, "Japanese", "Thai")
+	if err != nil {
+		t.Fatalf("CreateFromGame failed: %v", err)
+	}
+	if stats.TotalEntries == 0 {
+		t.Fatalf("Expected extracted entries, got 0")
+	}
+
+	// 4. Test Current project
+	currentProj := projectSvc.Current()
+	if currentProj == nil {
+		t.Fatalf("Expected current project to be non-nil")
+	}
+	if currentProj.Engine != "rpgm" {
+		t.Errorf("Expected current project engine 'rpgm', got '%s'", currentProj.Engine)
+	}
+
+	// 5. Test ProjectService.List
+	projects, err := projectSvc.List()
+	if err != nil {
+		t.Fatalf("ProjectService.List failed: %v", err)
+	}
+	if len(projects) != 1 {
+		t.Fatalf("Expected 1 registered project, got %d", len(projects))
+	}
+
+	// 6. Test EntryService: Files, Query, Update, Stats
+	files, err := entrySvc.Files()
+	if err != nil {
+		t.Fatalf("EntryService.Files failed: %v", err)
+	}
+	if len(files) == 0 {
+		t.Errorf("Expected files summary list, got empty")
+	}
+
+	queryRes, err := entrySvc.Query(storage.EntryQuery{Limit: 5})
+	if err != nil {
+		t.Fatalf("EntryService.Query failed: %v", err)
+	}
+	if len(queryRes.Entries) == 0 || queryRes.Total == 0 {
+		t.Fatalf("Expected query results, got 0")
+	}
+
+	firstEntryID := queryRes.Entries[0].ID
+	if err := entrySvc.Update(firstEntryID, "สวัสดีเทสต์"); err != nil {
+		t.Fatalf("EntryService.Update failed: %v", err)
+	}
+
+	wsStats, err := entrySvc.Stats()
+	if err != nil {
+		t.Fatalf("EntryService.Stats failed: %v", err)
+	}
+	if wsStats.Translated < 1 {
+		t.Errorf("Expected at least 1 translated entry after update, got %d", wsStats.Translated)
+	}
+
+	// 7. Test TranslationService with mock provider
+	err = transSvc.Start(app.TranslateOptions{
+		Provider: app.ProviderConfig{
+			Name: "mock",
+		},
+		BatchSize:   5,
+		Concurrency: 2,
+		Scope:       "untranslated",
+	})
+	if err != nil {
+		t.Fatalf("TranslationService.Start failed: %v", err)
+	}
+
+	// Concurrent run rejection
+	err2 := transSvc.Start(app.TranslateOptions{
+		Provider: app.ProviderConfig{Name: "mock"},
+	})
+	if err2 == nil {
+		t.Errorf("Expected error starting concurrent translation, got nil")
+	}
+
+	// Wait for translation to complete
+	deadline := time.Now().Add(5 * time.Second)
+	for transSvc.IsRunning() && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if transSvc.IsRunning() {
+		t.Errorf("Translation did not complete within deadline")
+	}
+
+	// 8. Test DeployService
+	// Copy test_game to temp dir for safe deploy testing
+	tempGameDir := filepath.Join(tempDir, "game_copy")
+	_ = os.MkdirAll(filepath.Join(tempGameDir, "data"), 0755)
+	_ = os.MkdirAll(filepath.Join(tempGameDir, "js", "plugins"), 0755)
+	_ = os.WriteFile(filepath.Join(tempGameDir, "js", "plugins.js"), []byte("var $plugins = [];"), 0644)
+
+	err = deploySvc.DeployLayer(tempGameDir, "Thai")
+	if err != nil {
+		t.Fatalf("DeployLayer failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tempGameDir, "js", "plugins", "NST_TranslationLayer.js")); err != nil {
+		t.Errorf("NST_TranslationLayer.js was not deployed: %v", err)
+	}
+
+	// 9. Test ProjectService Close and OpenWorkspace
+	if err := projectSvc.Close(); err != nil {
+		t.Fatalf("ProjectService.Close failed: %v", err)
+	}
+	if projectSvc.Current() != nil {
+		t.Errorf("Expected current project to be nil after close")
+	}
+
+	reopenedProj, err := projectSvc.OpenWorkspace(tempWsPath)
+	if err != nil {
+		t.Fatalf("OpenWorkspace failed: %v", err)
+	}
+	if reopenedProj == nil {
+		t.Fatalf("Expected reopened project to be non-nil")
+	}
+
+	// 10. Test RemoveFromRegistry
+	if err := projectSvc.RemoveFromRegistry(tempWsPath); err != nil {
+		t.Fatalf("RemoveFromRegistry failed: %v", err)
+	}
+	projectsAfterRemove, err := projectSvc.List()
+	if err != nil {
+		t.Fatalf("List after remove failed: %v", err)
+	}
+	if len(projectsAfterRemove) != 0 {
+		t.Errorf("Expected 0 projects after remove, got %d", len(projectsAfterRemove))
+	}
+}

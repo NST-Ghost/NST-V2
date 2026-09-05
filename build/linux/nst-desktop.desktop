@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=nst-desktop
+Exec=nst-desktop
+Icon=nst-desktop
+Categories=Development;
+Terminal=false
+Keywords=wails
+Version=1.0
+StartupNotify=false

@@ -1,0 +1,30 @@
+<<<ORIGINAL>>>
+NPC
+<<<TRANSLATED>>>
+[TH] NPC
+<<<END>>>
+
+<<<ORIGINAL>>>
+Elder
+<<<TRANSLATED>>>
+[TH] Elder
+<<<END>>>
+
+<<<ORIGINAL>>>
+Welcome to Go! Everything is fast here, \N[1].
+<<<TRANSLATED>>>
+[TH] Welcome to Go! Everything is fast here, \N[1].
+<<<END>>>
+
+<<<ORIGINAL>>>
+I am ready!
+<<<TRANSLATED>>>
+[TH] I am ready!
+<<<END>>>
+
+<<<ORIGINAL>>>
+Tell me more.
+<<<TRANSLATED>>>
+[TH] Tell me more.
+<<<END>>>
+

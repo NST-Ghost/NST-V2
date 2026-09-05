@@ -1,0 +1,18 @@
+<<<ORIGINAL>>>
+G
+<<<TRANSLATED>>>
+[TH] G
+<<<END>>>
+
+<<<ORIGINAL>>>
+Chronicles of the Go Hero
+<<<TRANSLATED>>>
+[TH] Chronicles of the Go Hero
+<<<END>>>
+
+<<<ORIGINAL>>>
+Nothing happened...
+<<<TRANSLATED>>>
+[TH] Nothing happened...
+<<<END>>>
+
