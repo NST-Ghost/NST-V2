@@ -613,7 +613,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                       <Input
                         type="number"
                         min={1}
-                        max={50}
+                        max={1000}
                         value={settings.default_batch_size}
                         onChange={(e) =>
                           setSettings({
