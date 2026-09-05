@@ -130,5 +130,36 @@ func TestCreateTranslator(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error creating nonexistent translator")
 	}
+
+	// Custom Provider via Env Dir
+	tempDir := t.TempDir()
+	t.Setenv("NST_PROVIDERS_DIR", tempDir)
+	_ = os.WriteFile(filepath.Join(tempDir, "mycustom.json"), []byte(`{
+		"name": "mycustom",
+		"display_name": "My Custom AI",
+		"base_url": "https://custom.example.com/v1",
+		"default_model": "custom-v1",
+		"api_key": "custom-key"
+	}`), 0644)
+
+	customTr, err := CreateTranslator(ProviderConfig{Name: "mycustom"})
+	if err != nil || customTr == nil {
+		t.Fatalf("Failed to create custom translator: %v", err)
+	}
+	if customTr.Name() != "mycustom" {
+		t.Errorf("Expected translator name 'mycustom', got %s", customTr.Name())
+	}
+
+	providers := ListAvailableProviders()
+	found := false
+	for _, p := range providers {
+		if p.Name == "mycustom" && p.IsCustom {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Expected 'mycustom' in ListAvailableProviders, but not found")
+	}
 }
 

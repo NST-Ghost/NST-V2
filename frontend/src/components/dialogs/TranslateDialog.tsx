@@ -18,6 +18,7 @@ import type { TranslationProgress } from "@bindings/nst-go/pkg/model";
 import { Events } from "@wailsio/runtime";
 import { toast } from "sonner";
 import { Languages, Loader2, Play, XCircle } from "lucide-react";
+import { fetchProviders, BUILTIN_PROVIDERS, type ProviderInfo } from "@/lib/providers";
 
 interface TranslateDialogProps {
   open: boolean;
@@ -36,6 +37,7 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
   targetLang,
   onFinished,
 }) => {
+  const [providers, setProviders] = useState<ProviderInfo[]>(BUILTIN_PROVIDERS);
   const [provider, setProvider] = useState("mock");
   const [modelName, setModelName] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -47,23 +49,37 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState<TranslationProgress | null>(null);
 
-  // Load defaults from settings
+  // Load available providers & settings defaults on dialog open
   useEffect(() => {
     if (open) {
+      // 1. Fetch dynamic providers/plugins list
+      fetchProviders().then((loadedProviders) => {
+        setProviders(loadedProviders);
+      });
+
+      // 2. Load saved settings
       SettingsService.GetSettings().then((s) => {
         if (s) {
-          setProvider(s.default_provider || "mock");
+          const defaultProv = s.default_provider || "mock";
+          setProvider(defaultProv);
           setModelName(s.default_model || "");
           setBatchSize(s.default_batch_size || 10);
           setConcurrency(s.default_concurrency || 4);
 
-          if (s.default_provider === "gemini") {
+          // Resolve API key & baseURL for active provider
+          if (defaultProv === "gemini") {
             setApiKey(s.gemini_api_key || "");
-          } else if (s.default_provider === "openai") {
+          } else if (defaultProv === "openai") {
             setApiKey(s.openai_api_key || "");
             setBaseURL(s.openai_base_url || "");
-          } else if (s.default_provider === "google") {
+          } else if (defaultProv === "google") {
             setApiKey(s.google_api_key || "");
+          } else if (s.plugin_keys && s.plugin_keys[defaultProv]) {
+            setApiKey(s.plugin_keys[defaultProv]);
+            setBaseURL(s.plugin_base_urls?.[defaultProv] || "");
+          } else if ((s as any)[`${defaultProv}_api_key`]) {
+            setApiKey((s as any)[`${defaultProv}_api_key`]);
+            setBaseURL((s as any)[`${defaultProv}_base_url`] || "");
           }
         }
       });
@@ -72,20 +88,37 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
     }
   }, [open]);
 
-  // Update apiKey when provider changes
+  // Update apiKey and model options dynamically when provider changes
   const handleProviderChange = (newProvider: string) => {
     setProvider(newProvider);
+    const pInfo = providers.find((p) => p.name === newProvider);
+
     SettingsService.GetSettings().then((s) => {
-      if (!s) return;
-      if (newProvider === "gemini") {
-        setApiKey(s.gemini_api_key || "");
-      } else if (newProvider === "openai") {
-        setApiKey(s.openai_api_key || "");
-        setBaseURL(s.openai_base_url || "");
-      } else if (newProvider === "google") {
-        setApiKey(s.google_api_key || "");
-      } else {
-        setApiKey("");
+      let key = "";
+      let base = pInfo?.base_url || "";
+      let model = pInfo?.default_model || (pInfo?.available_models?.[0] || "");
+
+      if (s) {
+        if (newProvider === "gemini") {
+          key = s.gemini_api_key || "";
+        } else if (newProvider === "openai") {
+          key = s.openai_api_key || "";
+          base = s.openai_base_url || base;
+        } else if (newProvider === "google") {
+          key = s.google_api_key || "";
+        } else if (s.plugin_keys && s.plugin_keys[newProvider]) {
+          key = s.plugin_keys[newProvider];
+          base = s.plugin_base_urls?.[newProvider] || base;
+        } else if ((s as any)[`${newProvider}_api_key`]) {
+          key = (s as any)[`${newProvider}_api_key`];
+          base = (s as any)[`${newProvider}_base_url`] || base;
+        }
+      }
+
+      setApiKey(key);
+      setBaseURL(base);
+      if (model) {
+        setModelName(model);
       }
     });
   };
@@ -160,6 +193,8 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
     }
   };
 
+  const currentProviderInfo = providers.find((p) => p.name === provider);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -171,7 +206,7 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
         </DialogHeader>
 
         <div className="space-y-4 py-2 text-sm">
-          {/* Provider Selection */}
+          {/* Dynamic Provider Selection */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
@@ -183,10 +218,11 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
                 disabled={isRunning}
                 className="w-full h-8 rounded-md border border-[#3a3a3a] bg-[#222222] px-2 text-sm text-[#f0f0f0] focus:outline-none focus:border-[#3399ff] disabled:opacity-50"
               >
-                <option value="mock">Mock (Fast Offline Preview)</option>
-                <option value="gemini">Google Gemini AI</option>
-                <option value="openai">OpenAI / Ollama</option>
-                <option value="google">Google Translate API</option>
+                {providers.map((p) => (
+                  <option key={p.name} value={p.name}>
+                    {p.display_name} {p.is_custom ? "(Plugin)" : ""}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
@@ -194,26 +230,49 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
                 Model Name
               </label>
               <Input
+                list="provider-model-options"
                 value={modelName}
                 onChange={(e) => setModelName(e.target.value)}
                 disabled={isRunning}
-                placeholder="e.g. gemini-2.5-flash"
+                placeholder={currentProviderInfo?.default_model || "e.g. gpt-4o-mini"}
               />
+              {currentProviderInfo?.available_models && (
+                <datalist id="provider-model-options">
+                  {currentProviderInfo.available_models.map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+              )}
             </div>
           </div>
 
-          {/* API Key */}
+          {/* API Key (for non-mock providers) */}
           {provider !== "mock" && (
             <div>
               <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
-                API Key
+                API Key {currentProviderInfo?.is_custom ? `(${currentProviderInfo.display_name})` : ""}
               </label>
               <Input
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 disabled={isRunning}
-                placeholder="Enter API Key"
+                placeholder={`Enter API Key for ${currentProviderInfo?.display_name || provider}`}
+              />
+            </div>
+          )}
+
+          {/* Base URL (if custom plugin or openai) */}
+          {(currentProviderInfo?.is_custom || provider === "openai") && (
+            <div>
+              <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+                Base URL {currentProviderInfo?.is_custom ? "(Plugin Endpoint)" : "(Custom Endpoint)"}
+              </label>
+              <Input
+                value={baseURL}
+                onChange={(e) => setBaseURL(e.target.value)}
+                disabled={isRunning}
+                placeholder={currentProviderInfo?.base_url || "https://..."}
               />
             </div>
           )}
@@ -244,7 +303,7 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
                   disabled={isRunning}
                   className="accent-[#3399ff]"
                 />
-                All Entries
+                All Text (Overwrite)
               </label>
               {currentFile && (
                 <label className="flex items-center gap-1.5 text-xs text-[#d0d0d0] cursor-pointer">
@@ -256,17 +315,17 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
                     disabled={isRunning}
                     className="accent-[#3399ff]"
                   />
-                  Selected File ({currentFile})
+                  Current File ({currentFile})
                 </label>
               )}
             </div>
           </div>
 
-          {/* Concurrency & Batch */}
+          {/* Batch Size & Concurrency */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-[#888888] mb-1">
-                Batch Size
+              <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+                Batch Size (lines)
               </label>
               <Input
                 type="number"
@@ -278,8 +337,8 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
               />
             </div>
             <div>
-              <label className="block text-xs text-[#888888] mb-1">
-                Workers (Concurrency)
+              <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+                Concurrency (workers)
               </label>
               <Input
                 type="number"
@@ -292,49 +351,64 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
             </div>
           </div>
 
-          {/* Live Progress Bar */}
+          {/* Languages info indicator */}
+          <div className="flex items-center justify-between text-xs text-[#808080] bg-[#1a1a1a] p-2 rounded-md border border-[#2a2a2a]">
+            <span>
+              Source: <strong className="text-[#c0c0c0]">{sourceLang}</strong>
+            </span>
+            <span>➔</span>
+            <span>
+              Target: <strong className="text-[#3399ff]">{targetLang}</strong>
+            </span>
+          </div>
+
+          {/* Progress Tracker */}
           {isRunning && (
-            <div className="border border-[#383838] bg-[#1e1e1e] p-3 rounded-md space-y-2">
-              <div className="flex justify-between items-center text-xs">
-                <span className="font-semibold text-[#3399ff] flex items-center gap-1.5">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Translating…
+            <div className="space-y-2 border-t border-[#333333] pt-3">
+              <div className="flex justify-between text-xs text-[#a0a0a0]">
+                <span>
+                  Translated: {progress ? progress.completed : 0} /{" "}
+                  {progress ? progress.total : 0}
                 </span>
-                <span className="font-mono text-white">
-                  {(progress?.percent || 0).toFixed(1)}%
+                <span>
+                  {progress ? Math.round(progress.percent) : 0}%
                 </span>
               </div>
-              <Progress value={progress?.percent || 0} className="h-2" />
-              <div className="flex justify-between text-xs text-[#888888] font-mono">
-                <span>
-                  {progress?.completed || 0} / {progress?.total || 0} lines
-                </span>
-                <span className="truncate max-w-[180px]">
-                  {progress?.current_file || "initializing…"}
-                </span>
+              <Progress
+                value={progress ? progress.percent : 0}
+              />
+              <div className="text-[11px] text-[#707070] truncate flex items-center gap-1.5">
+                <Loader2 className="w-3 h-3 animate-spin text-[#3399ff]" />
+                {progress?.current_file ? `Translating ${progress.current_file}...` : "Working..."}
               </div>
             </div>
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0">
           {isRunning ? (
             <Button
               variant="destructive"
               onClick={handleCancel}
-              className="gap-1.5 w-full"
+              className="gap-1.5"
             >
               <XCircle className="w-4 h-4" />
               Cancel Translation
             </Button>
           ) : (
             <>
-              <Button variant="secondary" onClick={() => onOpenChange(false)}>
+              <Button
+                variant="secondary"
+                onClick={() => onOpenChange(false)}
+              >
                 Close
               </Button>
-              <Button onClick={handleStart} className="gap-1.5">
+              <Button
+                onClick={handleStart}
+                className="gap-1.5 bg-[#1a8cff] hover:bg-[#0073e6] text-white"
+              >
                 <Play className="w-4 h-4 fill-white" />
-                Start Translating
+                Start Translation
               </Button>
             </>
           )}

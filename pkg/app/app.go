@@ -17,6 +17,7 @@ import (
 	"nst-go/pkg/registry"
 	"nst-go/pkg/storage"
 	"nst-go/pkg/translator"
+	"nst-go/pkg/translator/custom"
 	"nst-go/pkg/translator/gemini"
 	"nst-go/pkg/translator/google"
 	"nst-go/pkg/translator/mock"
@@ -412,6 +413,67 @@ func (w *Workspace) MergeNewVersion(ctx context.Context, newGamePath string) (*m
 	return stats, nil
 }
 
+// ProviderInfo represents metadata about an available translation provider
+type ProviderInfo struct {
+	Name            string   `json:"name"`
+	DisplayName     string   `json:"display_name"`
+	Description     string   `json:"description,omitempty"`
+	IsCustom        bool     `json:"is_custom"`
+	BaseURL         string   `json:"base_url,omitempty"`
+	DefaultModel    string   `json:"default_model,omitempty"`
+	AvailableModels []string `json:"available_models,omitempty"`
+}
+
+// ListAvailableProviders returns all built-in and detected external custom providers
+func ListAvailableProviders() []ProviderInfo {
+	list := []ProviderInfo{
+		{
+			Name:        "mock",
+			DisplayName: "Mock (Debug / Test)",
+			Description: "Fast offline mock provider for testing without API usage",
+			IsCustom:    false,
+		},
+		{
+			Name:            "gemini",
+			DisplayName:     "Google Gemini AI",
+			Description:     "Official Google Gemini models (Gemini 2.5 Flash, Gemini 1.5 Pro)",
+			IsCustom:        false,
+			DefaultModel:    "gemini-2.5-flash",
+			AvailableModels: []string{"gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"},
+		},
+		{
+			Name:            "openai",
+			DisplayName:     "OpenAI / Compatible",
+			Description:     "Standard OpenAI API or local LLM server (Ollama, LM Studio)",
+			IsCustom:        false,
+			BaseURL:         "https://api.openai.com/v1",
+			DefaultModel:    "gpt-4o-mini",
+			AvailableModels: []string{"gpt-4o-mini", "gpt-4o", "o3-mini", "gpt-3.5-turbo"},
+		},
+		{
+			Name:        "google",
+			DisplayName: "Google Translate API",
+			Description: "Google Cloud Translation API v2",
+			IsCustom:    false,
+		},
+	}
+
+	if customList, err := custom.List(); err == nil {
+		for _, c := range customList {
+			list = append(list, ProviderInfo{
+				Name:            c.Name,
+				DisplayName:     c.DisplayName,
+				Description:     c.Description,
+				IsCustom:        true,
+				BaseURL:         c.BaseURL,
+				DefaultModel:    c.DefaultModel,
+				AvailableModels: c.AvailableModels,
+			})
+		}
+	}
+	return list
+}
+
 // CreateTranslator constructs a translator implementation from ProviderConfig
 func CreateTranslator(cfg ProviderConfig) (translator.Translator, error) {
 	switch cfg.Name {
@@ -436,7 +498,11 @@ func CreateTranslator(cfg ProviderConfig) (translator.Translator, error) {
 			APIKey: cfg.APIKey,
 		}), nil
 	default:
-		return nil, fmt.Errorf("unsupported provider: %s (available: mock, gemini, openai, google)", cfg.Name)
+		// Attempt to load external custom provider definition (e.g. from ~/.config/nst/providers/*.json or ./providers/*.json)
+		if customDef, err := custom.Find(cfg.Name); err == nil {
+			return custom.NewTranslator(*customDef, cfg.APIKey, cfg.Model, cfg.BaseURL)
+		}
+		return nil, fmt.Errorf("unsupported provider: %s (available built-in: mock, gemini, openai, google, or custom providers in providers/)", cfg.Name)
 	}
 }
 

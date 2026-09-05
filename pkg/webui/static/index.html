@@ -7,6 +7,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
+      color-scheme: dark;
       --bg: #1a1a1a;
       --bg-light: #2b2b2b;
       --bg-dark: #0d0d0d;
@@ -425,6 +426,137 @@
     .modal-form-group input:focus, .modal-form-group select:focus {
       border-color: var(--accent);
     }
+
+    /* Settings Modal with Sidebar Layout */
+    .modal-box-large {
+      width: 820px !important;
+      max-width: 95vw;
+      height: 540px;
+      max-height: 90vh;
+    }
+    .settings-container {
+      display: flex;
+      flex: 1;
+      height: calc(100% - 85px);
+      overflow: hidden;
+    }
+    .settings-sidebar {
+      width: 210px;
+      background: #191919;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 8px 0;
+      gap: 1px;
+      user-select: none;
+    }
+    .settings-nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 16px;
+      color: #888;
+      font-size: 12.5px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .settings-nav-item:hover {
+      background: #232323;
+      color: #eee;
+    }
+    .settings-nav-item.active {
+      background: #2b2b2b;
+      color: #fff;
+      font-weight: 600;
+      border-left: 3px solid var(--accent);
+      padding-left: 13px;
+    }
+    .settings-nav-item .nav-icon {
+      font-size: 13px;
+      width: 18px;
+      text-align: center;
+    }
+    .settings-content {
+      flex: 1;
+      background: var(--bg-light);
+      padding: 18px 22px;
+      overflow-y: auto;
+    }
+    .settings-panel {
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .settings-panel.active {
+      display: flex;
+    }
+    .settings-header-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 2px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+    }
+    .settings-section-desc {
+      font-size: 11.5px;
+      color: var(--fg-dim);
+      margin-top: -8px;
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+    .key-input-container {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .key-input-container input {
+      flex: 1;
+    }
+    .key-toggle-btn {
+      background: #222;
+      border: 1px solid var(--border);
+      color: #aaa;
+      padding: 6px 9px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .key-toggle-btn:hover {
+      background: #333;
+      color: #fff;
+    }
+    .plugin-card {
+      background: #181818;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .plugin-card-title {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .plugin-card-meta {
+      font-size: 11px;
+      color: #777;
+      margin-top: 2px;
+    }
+    .badge-tag {
+      background: #1e3a5f;
+      color: #64b5f6;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-weight: bold;
+    }
+    .badge-tag-custom {
+      background: #3e2723;
+      color: #ffb74d;
+    }
   </style>
 </head>
 <body>
@@ -658,23 +790,209 @@
 
   <!-- Dialog 4: Settings -->
   <div class="modal-overlay" id="modal-settings">
-    <div class="modal-box">
+    <div class="modal-box modal-box-large">
       <div class="modal-header">
-        <span>Settings</span>
-        <span style="cursor: pointer;" onclick="closeModal('modal-settings')">✕</span>
+        <span style="display: flex; align-items: center; gap: 8px;">
+          <span>⚙️</span>
+          <span>Preferences & Settings</span>
+        </span>
+        <span style="cursor: pointer; padding: 0 4px;" onclick="closeModal('modal-settings')">✕</span>
       </div>
-      <div class="modal-body">
-        <div class="modal-form-group">
-          <label>Default Gemini API Key</label>
-          <input type="password" id="set-gemini-key">
+      <div class="settings-container">
+        <!-- Sidebar Navigation -->
+        <div class="settings-sidebar">
+          <div class="settings-nav-item active" onclick="switchSettingsTab('providers', this)">
+            <span class="nav-icon">⚡</span>
+            <span>Providers</span>
+          </div>
+          <div class="settings-nav-item" onclick="switchSettingsTab('models', this)">
+            <span class="nav-icon">🤖</span>
+            <span>Models</span>
+          </div>
+          <div class="settings-nav-item" onclick="switchSettingsTab('keys', this)">
+            <span class="nav-icon">🔑</span>
+            <span>API Keys</span>
+          </div>
+          <div class="settings-nav-item" onclick="switchSettingsTab('plugins', this)">
+            <span class="nav-icon">🧩</span>
+            <span>Plugins</span>
+          </div>
+          <div class="settings-nav-item" onclick="switchSettingsTab('translation', this)">
+            <span class="nav-icon">⚙️</span>
+            <span>Translation</span>
+          </div>
+          <div class="settings-nav-item" onclick="switchSettingsTab('about', this)">
+            <span class="nav-icon">ℹ️</span>
+            <span>About</span>
+          </div>
         </div>
-        <div class="modal-form-group">
-          <label>Default OpenAI API Key</label>
-          <input type="password" id="set-openai-key">
+
+        <!-- Right Content Panels -->
+        <div class="settings-content">
+          <!-- Panel 1: Providers -->
+          <div class="settings-panel active" id="tab-settings-providers">
+            <div class="settings-header-title">Translation Providers</div>
+            <div class="settings-section-desc">Choose the default translation provider and manage API endpoints.</div>
+            <div class="modal-form-group">
+              <label>Default Active Provider</label>
+              <select id="set-active-provider" onchange="onActiveProviderChange()">
+                <option value="mock">Mock Service (Instant Test)</option>
+                <option value="gemini">Google Gemini</option>
+                <option value="openai">OpenAI / Local LLM</option>
+                <option value="google">Google Translate (Free)</option>
+              </select>
+            </div>
+            <div class="modal-form-group" id="set-base-url-group">
+              <label>Custom Base URL / Endpoint Override</label>
+              <input type="text" id="set-base-url" placeholder="https://api.openai.com/v1 หรือ http://localhost:11434/v1">
+            </div>
+            <div style="background: #191919; border: 1px solid var(--border); border-radius: 4px; padding: 12px; font-size: 12px; color: #aaa; margin-top: 6px;">
+              <strong style="color: #fff; display: block; margin-bottom: 4px;">Provider Information</strong>
+              <div id="set-provider-info">Selected Provider: <span id="set-info-name" style="color: #64b5f6; font-weight: bold;">Google Gemini</span></div>
+              <div style="margin-top: 4px; font-size: 11px; color: #777;" id="set-info-desc">Built-in high-speed multimodal driver.</div>
+            </div>
+          </div>
+
+          <!-- Panel 2: Models -->
+          <div class="settings-panel" id="tab-settings-models">
+            <div class="settings-header-title">Model Selection</div>
+            <div class="settings-section-desc">Select default AI models for each translation provider module.</div>
+            <div class="modal-form-group">
+              <label>Google Gemini Default Model</label>
+              <select id="set-model-gemini">
+                <option value="gemini-2.5-flash">gemini-2.5-flash (Fast & Recommended)</option>
+                <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                <option value="gemini-1.5-pro">gemini-1.5-pro (High reasoning)</option>
+              </select>
+            </div>
+            <div class="modal-form-group">
+              <label>OpenAI Default Model</label>
+              <select id="set-model-openai">
+                <option value="gpt-4o-mini">gpt-4o-mini (Cost-effective)</option>
+                <option value="gpt-4o">gpt-4o (High quality)</option>
+                <option value="o3-mini">o3-mini</option>
+              </select>
+            </div>
+            <!-- Dynamic Plugin Models Section -->
+            <div id="dynamic-plugin-models" style="display: flex; flex-direction: column; gap: 12px;">
+              <!-- Dynamically populated from discovered plugins -->
+            </div>
+            <div class="modal-form-group">
+              <label>Custom / Other Model Name</label>
+              <input type="text" id="set-model-custom" placeholder="e.g. qwen2.5:14b, llama3.3, claude-3-5-haiku">
+            </div>
+          </div>
+
+          <!-- Panel 3: API Keys -->
+          <div class="settings-panel" id="tab-settings-keys">
+            <div class="settings-header-title">API Keys Management</div>
+            <div class="settings-section-desc">Keys are stored securely in local storage and applied automatically to translation jobs.</div>
+            <div class="modal-form-group">
+              <label>Google Gemini API Key</label>
+              <div class="key-input-container">
+                <input type="password" id="set-key-gemini" placeholder="AIzaSy...">
+                <button class="key-toggle-btn" onclick="toggleKeyVisibility('set-key-gemini', this)">👁</button>
+              </div>
+            </div>
+            <div class="modal-form-group">
+              <label>OpenAI API Key</label>
+              <div class="key-input-container">
+                <input type="password" id="set-key-openai" placeholder="sk-...">
+                <button class="key-toggle-btn" onclick="toggleKeyVisibility('set-key-openai', this)">👁</button>
+              </div>
+            </div>
+            <!-- Dynamic Plugin Keys Section -->
+            <div id="dynamic-plugin-keys" style="display: flex; flex-direction: column; gap: 12px;">
+              <!-- Dynamically populated from discovered plugins -->
+            </div>
+            <div class="modal-form-group">
+              <label>Generic / Custom Provider API Key</label>
+              <div class="key-input-container">
+                <input type="password" id="set-key-custom" placeholder="Optional API Key for custom endpoint">
+                <button class="key-toggle-btn" onclick="toggleKeyVisibility('set-key-custom', this)">👁</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel 4: Plugins -->
+          <div class="settings-panel" id="tab-settings-plugins">
+            <div class="settings-header-title">External Translation Plugins</div>
+            <div class="settings-section-desc">External provider definitions detected in <code>./providers/*.json</code> and <code>~/.config/nst/providers/*.json</code>.</div>
+            <div id="settings-plugins-list" style="display: flex; flex-direction: column; gap: 8px;">
+              <!-- Dynamically populated -->
+            </div>
+            <div style="margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px;">
+              <strong style="color: #fff; font-size: 12.5px; display: block; margin-bottom: 8px;">➕ Add External Provider Plugin</strong>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div class="modal-form-group">
+                  <label>Plugin Identifier (lowercase)</label>
+                  <input type="text" id="new-plugin-name" placeholder="e.g. openrouter, groq">
+                </div>
+                <div class="modal-form-group">
+                  <label>Display Name</label>
+                  <input type="text" id="new-plugin-display" placeholder="e.g. OpenRouter AI">
+                </div>
+                <div class="modal-form-group" style="grid-column: span 2;">
+                  <label>Base URL Endpoint</label>
+                  <input type="text" id="new-plugin-url" placeholder="https://openrouter.ai/api/v1">
+                </div>
+                <div class="modal-form-group">
+                  <label>Default Model</label>
+                  <input type="text" id="new-plugin-model" placeholder="anthropic/claude-3.7-sonnet">
+                </div>
+                <div class="modal-form-group">
+                  <label>API Key (Optional)</label>
+                  <input type="password" id="new-plugin-key" placeholder="Bearer Token / API Key">
+                </div>
+              </div>
+              <button class="tool-btn" style="margin-top: 8px;" onclick="saveNewCustomPlugin()">Register Plugin</button>
+            </div>
+          </div>
+
+          <!-- Panel 5: Translation -->
+          <div class="settings-panel" id="tab-settings-translation">
+            <div class="settings-header-title">Translation Parameters</div>
+            <div class="settings-section-desc">Tune pipeline throughput, worker concurrency, and language defaults.</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div class="modal-form-group">
+                <label>Default Batch Size</label>
+                <input type="number" id="set-batch-size" min="1" max="100" value="10">
+              </div>
+              <div class="modal-form-group">
+                <label>Worker Concurrency</label>
+                <input type="number" id="set-concurrency" min="1" max="32" value="4">
+              </div>
+              <div class="modal-form-group">
+                <label>Default Source Language</label>
+                <input type="text" id="set-default-src" value="Japanese">
+              </div>
+              <div class="modal-form-group">
+                <label>Default Target Language</label>
+                <input type="text" id="set-default-tgt" value="Thai">
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel 6: About -->
+          <div class="settings-panel" id="tab-settings-about">
+            <div class="settings-header-title">About NST-V2</div>
+            <div class="settings-section-desc">Next-Generation Game Translation & Localization Suite.</div>
+            <div style="line-height: 1.6; font-size: 12.5px; color: #ccc;">
+              <p><strong>NST-V2 (Go Edition)</strong> — Built with Pure Go (<code>CGO_ENABLED=0</code>) for maximum speed and zero-dependency portability.</p>
+              <div style="margin-top: 10px; background: #191919; border: 1px solid var(--border); border-radius: 4px; padding: 12px;">
+                <div>⚡ <strong>Supported Engines:</strong> RPG Maker MV/MZ, Ren'Py, Godot, Unity</div>
+                <div style="margin-top: 4px;">🧩 <strong>Translation Layer:</strong> Non-destructive In-Game Runtime Injection</div>
+                <div style="margin-top: 4px;">🛡️ <strong>Tag Protection:</strong> Smart Engine Code Masking & Restoration</div>
+                <div style="margin-top: 4px;">🔌 <strong>Plugin Architecture:</strong> Declarative External Providers</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="tool-btn tool-btn-primary" onclick="closeModal('modal-settings')">Close</button>
+        <span id="settings-save-status" style="color: #2ecc71; font-size: 12px; margin-right: auto; display: none; align-self: center; font-weight: bold;">✓ Settings Saved!</span>
+        <button class="tool-btn" onclick="closeModal('modal-settings')">Close</button>
+        <button class="tool-btn tool-btn-primary" onclick="saveAllSettings()">Save Changes</button>
       </div>
     </div>
   </div>
@@ -690,17 +1008,366 @@
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
     function openProjectDialog() { openModal('modal-open'); }
-    function openTranslateDialog() { openModal('modal-translate'); }
+    function openProjectDialog() { openModal('modal-open'); }
     function openDeployDialog() { openModal('modal-deploy'); }
-    function openSettingsDialog() { openModal('modal-settings'); }
+    function openSettingsDialog() {
+      loadSettings();
+      refreshProvidersList();
+      openModal('modal-settings');
+    }
+
+    let availableProvidersList = [];
+
+    function switchSettingsTab(tabName, el) {
+      document.querySelectorAll('.settings-nav-item').forEach(item => item.classList.remove('active'));
+      if (el) el.classList.add('active');
+
+      document.querySelectorAll('.settings-panel').forEach(panel => panel.classList.remove('active'));
+      const target = document.getElementById('tab-settings-' + tabName);
+      if (target) target.classList.add('active');
+    }
+
+    function toggleKeyVisibility(inputId, btn) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = '🔒';
+      } else {
+        input.type = 'password';
+        btn.textContent = '👁';
+      }
+    }
+
+    function getSavedSettings() {
+      const raw = localStorage.getItem('nst_settings');
+      if (raw) {
+        try { return JSON.parse(raw); } catch (e) {}
+      }
+      return {
+        activeProvider: 'gemini',
+        baseUrl: '',
+        models: {
+          gemini: 'gemini-2.5-flash',
+          openai: 'gpt-4o-mini',
+          custom: ''
+        },
+        keys: {
+          gemini: '',
+          openai: '',
+          custom: ''
+        },
+        translation: {
+          batchSize: 10,
+          concurrency: 4,
+          srcLang: 'Japanese',
+          tgtLang: 'Thai'
+        }
+      };
+    }
+
+    function loadSettings() {
+      const s = getSavedSettings();
+
+      if (document.getElementById('set-active-provider')) document.getElementById('set-active-provider').value = s.activeProvider || 'gemini';
+      if (document.getElementById('set-base-url')) document.getElementById('set-base-url').value = s.baseUrl || '';
+
+      if (s.models) {
+        if (document.getElementById('set-model-gemini')) document.getElementById('set-model-gemini').value = s.models.gemini || 'gemini-2.5-flash';
+        if (document.getElementById('set-model-openai')) document.getElementById('set-model-openai').value = s.models.openai || 'gpt-4o-mini';
+        if (document.getElementById('set-model-custom')) document.getElementById('set-model-custom').value = s.models.custom || '';
+
+        document.querySelectorAll('.plugin-model-input').forEach(input => {
+          const prov = input.getAttribute('data-provider');
+          if (prov && s.models[prov]) input.value = s.models[prov];
+        });
+      }
+
+      if (s.keys) {
+        if (document.getElementById('set-key-gemini')) document.getElementById('set-key-gemini').value = s.keys.gemini || '';
+        if (document.getElementById('set-key-openai')) document.getElementById('set-key-openai').value = s.keys.openai || '';
+        if (document.getElementById('set-key-custom')) document.getElementById('set-key-custom').value = s.keys.custom || '';
+
+        document.querySelectorAll('.plugin-key-input').forEach(input => {
+          const prov = input.getAttribute('data-provider');
+          if (prov && s.keys[prov]) input.value = s.keys[prov];
+        });
+      }
+
+      if (s.translation) {
+        if (document.getElementById('set-batch-size')) document.getElementById('set-batch-size').value = s.translation.batchSize || 10;
+        if (document.getElementById('set-concurrency')) document.getElementById('set-concurrency').value = s.translation.concurrency || 4;
+        if (document.getElementById('set-default-src')) document.getElementById('set-default-src').value = s.translation.srcLang || 'Japanese';
+        if (document.getElementById('set-default-tgt')) document.getElementById('set-default-tgt').value = s.translation.tgtLang || 'Thai';
+
+        if (document.getElementById('dlg-src-lang')) document.getElementById('dlg-src-lang').value = s.translation.srcLang || 'Japanese';
+        if (document.getElementById('dlg-tgt-lang')) document.getElementById('dlg-tgt-lang').value = s.translation.tgtLang || 'Thai';
+      }
+
+      onActiveProviderChange();
+    }
+
+    function saveAllSettings() {
+      const s = {
+        activeProvider: document.getElementById('set-active-provider').value,
+        baseUrl: document.getElementById('set-base-url').value.trim(),
+        models: {
+          gemini: document.getElementById('set-model-gemini').value,
+          openai: document.getElementById('set-model-openai').value,
+          custom: document.getElementById('set-model-custom').value.trim()
+        },
+        keys: {
+          gemini: document.getElementById('set-key-gemini').value.trim(),
+          openai: document.getElementById('set-key-openai').value.trim(),
+          custom: document.getElementById('set-key-custom').value.trim()
+        },
+        translation: {
+          batchSize: parseInt(document.getElementById('set-batch-size').value, 10) || 10,
+          concurrency: parseInt(document.getElementById('set-concurrency').value, 10) || 4,
+          srcLang: document.getElementById('set-default-src').value.trim(),
+          tgtLang: document.getElementById('set-default-tgt').value.trim()
+        }
+      };
+
+      document.querySelectorAll('.plugin-key-input').forEach(input => {
+        const prov = input.getAttribute('data-provider');
+        if (prov) s.keys[prov] = input.value.trim();
+      });
+      document.querySelectorAll('.plugin-model-input').forEach(input => {
+        const prov = input.getAttribute('data-provider');
+        if (prov) s.models[prov] = input.value.trim();
+      });
+
+      localStorage.setItem('nst_settings', JSON.stringify(s));
+
+      const statusEl = document.getElementById('settings-save-status');
+      if (statusEl) {
+        statusEl.style.display = 'inline-block';
+        setTimeout(() => { statusEl.style.display = 'none'; }, 2500);
+      }
+
+      syncTranslateModalFromSettings();
+    }
+
+    function onActiveProviderChange() {
+      const p = document.getElementById('set-active-provider').value;
+      const infoName = document.getElementById('set-info-name');
+      const infoDesc = document.getElementById('set-info-desc');
+      const baseUrlInput = document.getElementById('set-base-url');
+
+      if (!infoName) return;
+
+      const found = availableProvidersList.find(x => x.name === p);
+      if (found) {
+        infoName.textContent = found.display_name;
+        if (found.is_custom) {
+          infoDesc.textContent = `External plugin driver (${found.description || 'Config-driven provider'}).`;
+        } else {
+          infoDesc.textContent = `Built-in NST provider (${found.description || 'Core engine'}).`;
+        }
+        if (found.base_url && !baseUrlInput.value) {
+          baseUrlInput.value = found.base_url;
+        }
+      } else {
+        infoName.textContent = p.toUpperCase();
+        infoDesc.textContent = "Selected translation backend.";
+      }
+    }
+
+    async function refreshProvidersList() {
+      try {
+        const res = await fetch('/api/providers');
+        if (!res.ok) return;
+        const list = await res.json();
+        availableProvidersList = list || [];
+
+        // Update settings provider select
+        const setSelect = document.getElementById('set-active-provider');
+        const currentSelected = setSelect ? setSelect.value : '';
+        if (setSelect) {
+          setSelect.innerHTML = '';
+          availableProvidersList.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.name;
+            opt.textContent = p.display_name + (p.is_custom ? ' [Plugin]' : '');
+            setSelect.appendChild(opt);
+          });
+          if (currentSelected) setSelect.value = currentSelected;
+        }
+
+        // Update translate modal select
+        const dlgSelect = document.getElementById('dlg-provider');
+        const dlgSelected = dlgSelect ? dlgSelect.value : '';
+        if (dlgSelect) {
+          dlgSelect.innerHTML = '';
+          availableProvidersList.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.name;
+            opt.textContent = p.display_name + (p.is_custom ? ' [Plugin]' : '');
+            dlgSelect.appendChild(opt);
+          });
+          if (dlgSelected) dlgSelect.value = dlgSelected;
+        }
+
+        // Dynamically build Plugin Keys inputs
+        const dynamicKeys = document.getElementById('dynamic-plugin-keys');
+        const s = getSavedSettings();
+        if (dynamicKeys) {
+          dynamicKeys.innerHTML = '';
+          const customList = availableProvidersList.filter(p => p.is_custom);
+          customList.forEach(p => {
+            const group = document.createElement('div');
+            group.className = 'modal-form-group';
+            const savedKey = (s.keys && s.keys[p.name]) || '';
+            group.innerHTML = `
+              <label>${p.display_name} API Key</label>
+              <div class="key-input-container">
+                <input type="password" class="plugin-key-input" data-provider="${p.name}" value="${savedKey}" placeholder="API Key for ${p.display_name}">
+                <button class="key-toggle-btn" type="button" onclick="toggleKeyVisibility(this.previousElementSibling, this)">👁</button>
+              </div>
+            `;
+            dynamicKeys.appendChild(group);
+          });
+        }
+
+        // Dynamically build Plugin Models inputs
+        const dynamicModels = document.getElementById('dynamic-plugin-models');
+        if (dynamicModels) {
+          dynamicModels.innerHTML = '';
+          const customList = availableProvidersList.filter(p => p.is_custom);
+          customList.forEach(p => {
+            const group = document.createElement('div');
+            group.className = 'modal-form-group';
+            const savedModel = (s.models && s.models[p.name]) || p.default_model || '';
+            if (p.available_models && p.available_models.length > 0) {
+              const opts = p.available_models.map(m => `<option value="${m}" ${m === savedModel ? 'selected' : ''}>${m}</option>`).join('');
+              group.innerHTML = `
+                <label>${p.display_name} Default Model</label>
+                <select class="plugin-model-input" data-provider="${p.name}">${opts}</select>
+              `;
+            } else {
+              group.innerHTML = `
+                <label>${p.display_name} Default Model</label>
+                <input type="text" class="plugin-model-input" data-provider="${p.name}" value="${savedModel}" placeholder="${p.default_model || 'model name'}">
+              `;
+            }
+            dynamicModels.appendChild(group);
+          });
+        }
+
+        // Update plugins panel list
+        const pluginContainer = document.getElementById('settings-plugins-list');
+        if (pluginContainer) {
+          pluginContainer.innerHTML = '';
+          availableProvidersList.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'plugin-card';
+            card.innerHTML = `
+              <div>
+                <div class="plugin-card-title">${p.display_name}</div>
+                <div class="plugin-card-meta">Identifier: <code>${p.name}</code> | Default Model: ${p.default_model || 'Standard'} ${p.base_url ? '| Endpoint: ' + p.base_url : ''}</div>
+              </div>
+              <span class="badge-tag ${p.is_custom ? 'badge-tag-custom' : ''}">${p.is_custom ? 'EXTERNAL PLUGIN' : 'BUILT-IN DRIVER'}</span>
+            `;
+            pluginContainer.appendChild(card);
+          });
+        }
+
+        onActiveProviderChange();
+      } catch (err) {
+        console.error('Failed to fetch providers:', err);
+      }
+    }
+
+    async function saveNewCustomPlugin() {
+      const name = document.getElementById('new-plugin-name').value.trim().toLowerCase();
+      const displayName = document.getElementById('new-plugin-display').value.trim() || name;
+      const baseUrl = document.getElementById('new-plugin-url').value.trim();
+      const defaultModel = document.getElementById('new-plugin-model').value.trim();
+      const apiKey = document.getElementById('new-plugin-key').value.trim();
+
+      if (!name || !baseUrl) {
+        alert('Please fill in both Plugin Identifier and Base URL.');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/providers/custom', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: name,
+            display_name: displayName,
+            base_url: baseUrl,
+            default_model: defaultModel,
+            api_key: apiKey
+          })
+        });
+
+        if (!res.ok) {
+          const d = await res.json();
+          alert('Failed to register plugin: ' + (d.error || 'Server error'));
+          return;
+        }
+
+        alert(`Plugin "${displayName}" registered successfully!`);
+        document.getElementById('new-plugin-name').value = '';
+        document.getElementById('new-plugin-display').value = '';
+        document.getElementById('new-plugin-url').value = '';
+        document.getElementById('new-plugin-model').value = '';
+        document.getElementById('new-plugin-key').value = '';
+
+        await refreshProvidersList();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function syncTranslateModalFromSettings() {
+      const s = getSavedSettings();
+      const dlgProv = document.getElementById('dlg-provider');
+      if (dlgProv && s.activeProvider) {
+        dlgProv.value = s.activeProvider;
+      }
+      toggleDlgProvider();
+    }
+
+    function openTranslateDialog() {
+      syncTranslateModalFromSettings();
+      openModal('modal-translate');
+    }
 
     function toggleDlgProvider() {
       const p = document.getElementById('dlg-provider').value;
-      document.getElementById('dlg-key-group').style.display = (p !== 'mock') ? 'block' : 'none';
-      document.getElementById('dlg-model-group').style.display = (p !== 'mock') ? 'block' : 'none';
-      document.getElementById('dlg-baseurl-group').style.display = (p === 'openai') ? 'block' : 'none';
-      if (p === 'gemini') document.getElementById('dlg-model').value = 'gemini-2.5-flash';
-      if (p === 'openai') document.getElementById('dlg-model').value = 'gpt-4o-mini';
+      const s = getSavedSettings();
+      const found = availableProvidersList.find(x => x.name === p);
+
+      const isMock = (p === 'mock' || p === 'google');
+      document.getElementById('dlg-key-group').style.display = isMock ? 'none' : 'block';
+      document.getElementById('dlg-model-group').style.display = isMock ? 'none' : 'block';
+      document.getElementById('dlg-baseurl-group').style.display = (p === 'openai' || (found && (found.is_custom || found.base_url))) ? 'block' : 'none';
+
+      // Auto fill model, key, and baseurl from settings or plugin definition
+      const modelInput = document.getElementById('dlg-model');
+      const keyInput = document.getElementById('dlg-api-key');
+      const urlInput = document.getElementById('dlg-baseurl');
+
+      if (p === 'gemini') {
+        if (modelInput) modelInput.value = (s.models && s.models.gemini) || 'gemini-2.5-flash';
+        if (keyInput) keyInput.value = (s.keys && s.keys.gemini) || '';
+      } else if (p === 'openai') {
+        if (modelInput) modelInput.value = (s.models && s.models.openai) || 'gpt-4o-mini';
+        if (keyInput) keyInput.value = (s.keys && s.keys.openai) || '';
+        if (urlInput) urlInput.value = s.baseUrl || '';
+      } else if (found && found.is_custom) {
+        if (modelInput) modelInput.value = (s.models && s.models[p]) || found.default_model || (found.available_models && found.available_models[0]) || '';
+        if (keyInput) keyInput.value = (s.keys && s.keys[p]) || '';
+        if (urlInput) urlInput.value = (s.baseUrl && p === s.activeProvider ? s.baseUrl : '') || found.base_url || '';
+      } else {
+        if (modelInput) modelInput.value = (s.models && s.models[p]) || (found && found.default_model) || (s.models && s.models.custom) || '';
+        if (keyInput) keyInput.value = (s.keys && s.keys[p]) || (s.keys && s.keys.custom) || '';
+        if (urlInput) urlInput.value = (found && found.base_url) || s.baseUrl || '';
+      }
     }
 
     async function loadData() {
@@ -995,6 +1662,8 @@
     }
 
     window.addEventListener('DOMContentLoaded', () => {
+      loadSettings();
+      refreshProvidersList();
       loadData();
 
       const container = document.getElementById('table-container');

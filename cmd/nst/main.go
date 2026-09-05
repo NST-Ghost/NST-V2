@@ -6,6 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -33,9 +35,8 @@ func main() {
 	command := os.Args[1]
 
 	switch command {
-	case "app", "gui":
-		fmt.Println("For the native desktop GUI, please run 'nst-desktop'.")
-		fmt.Println("To launch the browser-based dashboard, run 'nst ui'.")
+	case "app", "desktop", "gui":
+		handleApp(os.Args[2:])
 	case "ui", "web":
 		handleWeb(os.Args[2:])
 	case "extract":
@@ -50,6 +51,8 @@ func main() {
 		handleMerge(os.Args[2:])
 	case "projects":
 		handleProjects(os.Args[2:])
+	case "providers":
+		handleProviders(os.Args[2:])
 	case "status":
 		handleStatus(os.Args[2:])
 	case "mcp":
@@ -76,6 +79,7 @@ Usage:
   nst <command> [arguments]
 
 Commands:
+  app        Launch the NST Desktop Window Application (standalone native window)
   ui         Launch the interactive Web Dashboard in browser (recommended)
   extract    Extract translatable texts from a game into a .nst workspace file
   translate  Translate extracted texts using AI or Translation APIs
@@ -83,6 +87,7 @@ Commands:
   deploy     Export non-destructive runtime translation mod
   merge      Merge existing translations into an updated game version
   projects   List registered projects and translation progress
+  providers  List built-in and external custom translation providers
   status     Show translation statistics of a workspace
   publish    Compress and publish translation mod to Chanomhub
   mcp        Start the Model Context Protocol (MCP) server over stdio
@@ -90,8 +95,9 @@ Commands:
 
 Examples:
   nst ui
+  nst providers
   nst extract -path ./MyGame -workspace ./project.nst
-  nst translate -workspace ./project.nst -provider mock -source Japanese -target Thai
+  nst translate -workspace ./project.nst -provider gpt -source Japanese -target Thai
   nst inject -path ./MyGame -workspace ./project.nst -dest ./MyGame_Translated
   nst deploy -path ./MyGame -workspace ./project.nst
   nst publish -path ./MyGame -slug my-game-slug -token <YOUR_JWT>
@@ -133,7 +139,7 @@ func handleExtract(args []string) {
 func handleTranslate(args []string) {
 	fs := flag.NewFlagSet("translate", flag.ExitOnError)
 	wsPath := fs.String("workspace", "workspace.nst", "Path to .nst workspace file")
-	providerName := fs.String("provider", "mock", "Provider: mock, gemini, openai, google")
+	providerName := fs.String("provider", "mock", "Provider: mock, gemini, openai, google, or custom (e.g. gpt)")
 	apiKey := fs.String("api-key", os.Getenv("NST_API_KEY"), "API Key (or env NST_API_KEY)")
 	modelName := fs.String("model", "", "Model name (e.g. gemini-2.5-flash, gpt-4o-mini)")
 	baseURL := fs.String("base-url", "", "Custom Base URL for OpenAI/Ollama")
@@ -353,13 +359,80 @@ func handleProjects(args []string) {
 	}
 }
 
+func handleProviders(args []string) {
+	providers := app.ListAvailableProviders()
+
+	fmt.Println("================================================================================")
+	fmt.Println("NST Translation Providers (Built-in & Custom External Plugins)")
+	fmt.Println("================================================================================")
+
+	for _, p := range providers {
+		tag := "[Built-in]"
+		if p.IsCustom {
+			tag = "[Custom]  "
+		}
+		modelInfo := ""
+		if p.DefaultModel != "" {
+			modelInfo = fmt.Sprintf(" (Default Model: %s)", p.DefaultModel)
+		}
+		fmt.Printf("%s %-12s : %s%s\n", tag, p.Name, p.DisplayName, modelInfo)
+	}
+
+	fmt.Println("--------------------------------------------------------------------------------")
+	fmt.Println("💡 To add a new external provider without recompiling:")
+	fmt.Println("   Place a JSON config in ./providers/<name>.json or ~/.config/nst/providers/<name>.json")
+	fmt.Println("================================================================================")
+}
+
+func handleApp(args []string) {
+	// 1. Prefer native Wails desktop application if nst-desktop binary exists
+	execPath, _ := os.Executable()
+	execDir := filepath.Dir(execPath)
+
+	candidates := []string{
+		filepath.Join(execDir, "nst-desktop"),
+		filepath.Join(".", "bin", "nst-desktop"),
+		filepath.Join(".", "nst-desktop"),
+	}
+
+	for _, c := range candidates {
+		if fi, err := os.Stat(c); err == nil && !fi.IsDir() && (fi.Mode()&0111 != 0) {
+			fmt.Printf("🚀 Launching Native NST Desktop GUI (%s)...\n", c)
+			cmd := exec.Command(c, args...)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Stdin = os.Stdin
+			if err := cmd.Run(); err == nil {
+				return
+			}
+		}
+	}
+
+	// 2. Fallback to embedded web server desktop window
+	fs := flag.NewFlagSet("app", flag.ExitOnError)
+	port := fs.Int("port", 18080, "App server port")
+	fs.Parse(args)
+
+	srv := webui.New(*port, webui.ModeDesktop)
+	if err := srv.Start(); err != nil {
+		fmt.Printf("Application window error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 func handleWeb(args []string) {
 	fs := flag.NewFlagSet("ui", flag.ExitOnError)
 	port := fs.Int("port", 18080, "Web server port")
-	open := fs.Bool("open", true, "Open default browser automatically")
+	mode := fs.String("mode", webui.ModeBrowser, "UI mode: 'browser' (web browser tab), 'desktop' (native standalone window), or 'none'")
+	open := fs.Bool("open", true, "Open UI automatically")
 	fs.Parse(args)
 
-	srv := webui.New(*port, *open)
+	launchMode := *mode
+	if !*open {
+		launchMode = webui.ModeHeadless
+	}
+
+	srv := webui.New(*port, launchMode)
 	if err := srv.Start(); err != nil {
 		fmt.Printf("Web server error: %v\n", err)
 		os.Exit(1)

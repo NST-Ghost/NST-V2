@@ -18,6 +18,7 @@ type Config struct {
 	APIKey  string
 	Model   string
 	Timeout time.Duration
+	Headers map[string]string
 }
 
 type Client struct {
@@ -116,6 +117,9 @@ func (c *Client) Translate(ctx context.Context, texts []string, opts translator.
 	httpReq.Header.Set("Content-Type", "application/json")
 	if c.cfg.APIKey != "" {
 		httpReq.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
+	}
+	for k, v := range c.cfg.Headers {
+		httpReq.Header.Set(k, v)
 	}
 
 	resp, err := c.httpClient.Do(httpReq)

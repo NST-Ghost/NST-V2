@@ -40,3 +40,7 @@ Thumbs.db
 *.log
 .env
 .env.local
+
+# External translation provider configs (ignore user keys/endpoints)
+providers/*.json
+!providers/*.template

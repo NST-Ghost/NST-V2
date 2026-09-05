@@ -8,7 +8,9 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/pprof"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
@@ -17,23 +19,33 @@ import (
 	"nst-go/pkg/model"
 	"nst-go/pkg/registry"
 	"nst-go/pkg/storage"
+	"nst-go/pkg/translator/custom"
 )
 
 //go:embed static/*
 var staticFS embed.FS
 
+const (
+	ModeDesktop  = "desktop"
+	ModeBrowser  = "browser"
+	ModeHeadless = "none"
+)
+
 type Server struct {
-	port       int
-	autoOpen   bool
-	mu         sync.Mutex
-	progress   model.TranslationProgress
+	port          int
+	mode          string
+	mu            sync.Mutex
+	progress      model.TranslationProgress
 	isTranslating bool
 }
 
-func New(port int, autoOpen bool) *Server {
+func New(port int, mode string) *Server {
+	if mode == "" {
+		mode = ModeDesktop
+	}
 	return &Server{
-		port:     port,
-		autoOpen: autoOpen,
+		port: port,
+		mode: mode,
 	}
 }
 
@@ -60,6 +72,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/project/merge", s.handleMerge)
 	mux.HandleFunc("/api/publish/chanomhub", s.handlePublishChanomhub)
 	mux.HandleFunc("/api/system/stats", s.handleSystemStats)
+	mux.HandleFunc("/api/providers", s.handleListProviders)
+	mux.HandleFunc("/api/providers/custom", s.handleSaveCustomProvider)
 
 	// 3. Go Runtime Performance & Profiling (pprof)
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
@@ -76,14 +90,18 @@ func (s *Server) Start() error {
 
 	url := fmt.Sprintf("http://localhost:%d", s.port)
 	fmt.Println("==================================================")
-	fmt.Printf("🌐 NST Web Dashboard running at: %s\n", url)
+	if s.mode == ModeDesktop || s.mode == "app" || s.mode == "gui" {
+		fmt.Printf("🖥️  NST Desktop Application starting at: %s\n", url)
+	} else {
+		fmt.Printf("🌐 NST Web Dashboard running at: %s\n", url)
+	}
 	fmt.Println("   Press Ctrl+C to stop")
 	fmt.Println("==================================================")
 
-	if s.autoOpen {
+	if s.mode != ModeHeadless && s.mode != "none" && s.mode != "false" {
 		go func() {
-			time.Sleep(500 * time.Millisecond)
-			openBrowser(url)
+			time.Sleep(300 * time.Millisecond)
+			LaunchUI(url, s.mode)
 		}()
 	}
 
@@ -497,10 +515,103 @@ func jsonResponse(w http.ResponseWriter, data interface{}) {
 	_ = json.NewEncoder(w).Encode(data)
 }
 
+func (s *Server) handleListProviders(w http.ResponseWriter, r *http.Request) {
+	providers := app.ListAvailableProviders()
+	jsonResponse(w, providers)
+}
+
+func (s *Server) handleSaveCustomProvider(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, "method not allowed", 405)
+		return
+	}
+	var def custom.Definition
+	if err := json.NewDecoder(r.Body).Decode(&def); err != nil {
+		jsonError(w, err.Error(), 400)
+		return
+	}
+	if err := custom.Save(def); err != nil {
+		jsonError(w, err.Error(), 500)
+		return
+	}
+	jsonResponse(w, map[string]interface{}{"success": true, "provider": def})
+}
+
 func jsonError(w http.ResponseWriter, msg string, code int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+func findDesktopAppRunner(url string) (string, []string) {
+	switch runtime.GOOS {
+	case "windows":
+		edgePaths := []string{
+			`C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`,
+			`C:\Program Files\Microsoft\Edge\Application\msedge.exe`,
+			`C:\Program Files\Google\Chrome\Application\chrome.exe`,
+			`C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`,
+		}
+		for _, p := range edgePaths {
+			if _, err := os.Stat(p); err == nil {
+				return p, []string{"--app=" + url}
+			}
+		}
+		if p, err := exec.LookPath("msedge"); err == nil {
+			return p, []string{"--app=" + url}
+		}
+		if p, err := exec.LookPath("chrome"); err == nil {
+			return p, []string{"--app=" + url}
+		}
+	case "darwin":
+		macApps := []string{
+			"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+			"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+			"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+		}
+		for _, p := range macApps {
+			if _, err := os.Stat(p); err == nil {
+				return p, []string{"--app=" + url}
+			}
+		}
+	default: // linux, bsd
+		linuxRunners := []string{
+			"google-chrome",
+			"google-chrome-stable",
+			"brave-browser",
+			"chromium",
+			"chromium-browser",
+			"microsoft-edge",
+			"microsoft-edge-stable",
+		}
+		for _, name := range linuxRunners {
+			if path, err := exec.LookPath(name); err == nil {
+				return path, []string{"--app=" + url, "--class=NST", "--name=NST"}
+			}
+		}
+	}
+	return "", nil
+}
+
+// LaunchUI opens the UI in desktop window mode or web browser mode
+func LaunchUI(url string, mode string) {
+	if mode == ModeHeadless || mode == "none" || mode == "false" {
+		return
+	}
+
+	if mode == ModeDesktop || mode == "app" || mode == "gui" {
+		if runner, args := findDesktopAppRunner(url); runner != "" {
+			fmt.Printf("🖥️  Launching NST in Standalone Desktop Window (%s)...\n", filepath.Base(runner))
+			cmd := exec.Command(runner, args...)
+			if err := cmd.Start(); err == nil {
+				return
+			}
+		}
+		fmt.Println("ℹ️  No compatible desktop window runner found, falling back to default web browser...")
+	}
+
+	// Browser fallback
+	openBrowser(url)
 }
 
 func openBrowser(url string) {

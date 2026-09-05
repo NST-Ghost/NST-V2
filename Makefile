@@ -9,6 +9,10 @@ all: test build
 build:
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/$(BINARY_NAME) ./cmd/nst
 
+desktop:
+	cd frontend && npm run build
+	go build -tags gtk3 -ldflags="$(LDFLAGS)" -o bin/$(BINARY_NAME)-desktop ./cmd/nst-desktop
+
 test:
 	CGO_ENABLED=0 go test -v ./pkg/...
 
