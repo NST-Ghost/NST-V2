@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Run Tests & Vet
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          check-latest: true
+
+      - name: Go Vet
+        run: |
+          go vet ./pkg/... ./cmd/nst/...
+
+      - name: Run Unit Tests
+        run: |
+          CGO_ENABLED=0 go test -v ./pkg/...
+
+      - name: Test Build CLI
+        run: |
+          CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/nst ./cmd/nst
+          ./bin/nst version

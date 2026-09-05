@@ -1,0 +1,213 @@
+name: Build & Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: 'Force release even if tag already exists'
+        type: boolean
+        default: false
+      custom_version:
+        description: 'Custom version override (e.g. 2.0.1)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-test:
+    name: Check Version & Run Tests
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version_step.outputs.version }}
+      tag: ${{ steps.version_step.outputs.tag }}
+      is_release: ${{ steps.version_step.outputs.is_release }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          check-latest: true
+
+      - name: Run Unit Tests
+        run: |
+          CGO_ENABLED=0 go test -v ./pkg/...
+
+      - name: Determine Target Version
+        id: version_step
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+            VER="${TAG#v}"
+            IS_RELEASE="true"
+            echo "Triggered by tag: $TAG (version: $VER)"
+          elif [ -n "${{ inputs.custom_version }}" ]; then
+            VER="${{ inputs.custom_version }}"
+            TAG="v${VER}"
+            IS_RELEASE="true"
+            echo "Triggered manually with custom version: $TAG"
+          else
+            VER=$(cat VERSION | tr -d '[:space:]')
+            TAG="v${VER}"
+            
+            # Fetch remote tags to check existence
+            git fetch --tags --force
+            if git rev-parse "$TAG" >/dev/null 2>&1 || git ls-remote --tags origin "refs/tags/$TAG" | grep -q "$TAG"; then
+              if [ "${{ inputs.force_release }}" = "true" ]; then
+                IS_RELEASE="true"
+                echo "Tag $TAG exists, but force_release is enabled. Proceeding with release."
+              else
+                IS_RELEASE="false"
+                echo "Tag $TAG already exists on remote. Skipping automated GitHub Release (will only upload artifacts)."
+              fi
+            else
+              IS_RELEASE="true"
+              echo "New version detected in main: $VER (Tag $TAG does not exist yet). Will create release."
+            fi
+          fi
+
+          echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "is_release=$IS_RELEASE" >> $GITHUB_OUTPUT
+
+  build:
+    name: Build (${{ matrix.os }}/${{ matrix.arch }})
+    needs: check-and-test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            ext: ""
+            format: tar.gz
+          - os: linux
+            arch: arm64
+            ext: ""
+            format: tar.gz
+          - os: windows
+            arch: amd64
+            ext: ".exe"
+            format: zip
+          - os: darwin
+            arch: arm64
+            ext: ""
+            format: tar.gz
+          - os: darwin
+            arch: amd64
+            ext: ""
+            format: tar.gz
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          check-latest: true
+
+      - name: Build Binary
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 0
+          VER: ${{ needs.check-and-test.outputs.version }}
+        run: |
+          OUTPUT_NAME="nst${{ matrix.ext }}"
+          mkdir -p bin
+          go build -ldflags="-s -w -X 'main.version=${VER}'" -o "bin/${OUTPUT_NAME}" ./cmd/nst
+
+      - name: Package Archive
+        id: package
+        env:
+          VER: ${{ needs.check-and-test.outputs.version }}
+          OS: ${{ matrix.os }}
+          ARCH: ${{ matrix.arch }}
+          FORMAT: ${{ matrix.format }}
+        run: |
+          PACKAGE_NAME="nst-v${VER}-${OS}-${ARCH}"
+          mkdir -p "dist_staging/${PACKAGE_NAME}"
+
+          # Copy binary and docs
+          cp bin/nst* "dist_staging/${PACKAGE_NAME}/"
+          cp README.md LICENSE "dist_staging/${PACKAGE_NAME}/"
+          if [ -f REMAKE_SPEC.md ]; then
+            cp REMAKE_SPEC.md "dist_staging/${PACKAGE_NAME}/"
+          fi
+
+          mkdir -p release_assets
+          cd dist_staging
+          if [ "$FORMAT" = "zip" ]; then
+            sudo apt-get update && sudo apt-get install -y zip
+            zip -r "../release_assets/${PACKAGE_NAME}.zip" "${PACKAGE_NAME}"
+            echo "asset_file=${PACKAGE_NAME}.zip" >> $GITHUB_ENV
+          else
+            tar -czvf "../release_assets/${PACKAGE_NAME}.tar.gz" "${PACKAGE_NAME}"
+            echo "asset_file=${PACKAGE_NAME}.tar.gz" >> $GITHUB_ENV
+          fi
+          cd ..
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.os }}-${{ matrix.arch }}
+          path: release_assets/*
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    needs: [check-and-test, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all_packages
+          pattern: package-*
+          merge-multiple: true
+
+      - name: Generate Checksums
+        run: |
+          mkdir -p release_dist
+          cp all_packages/* release_dist/
+          cd release_dist
+          sha256sum * > checksums.txt
+          cat checksums.txt
+          cd ..
+
+      - name: Upload All Dist Packages to Workflow Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nst-v${{ needs.check-and-test.outputs.version }}-all-platforms
+          path: release_dist/*
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: needs.check-and-test.outputs.is_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.check-and-test.outputs.tag }}
+          name: "NST-V2 ${{ needs.check-and-test.outputs.tag }}"
+          target_commitish: ${{ github.sha }}
+          draft: false
+          prerelease: ${{ contains(needs.check-and-test.outputs.version, '-alpha') || contains(needs.check-and-test.outputs.version, '-beta') || contains(needs.check-and-test.outputs.version, '-rc') }}
+          generate_release_notes: true
+          files: release_dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

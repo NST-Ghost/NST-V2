@@ -78,6 +78,22 @@ Generated binaries will be stored in `dist/`:
 
 ---
 
+## Automated Build & Release (CI/CD)
+
+This repository features automated GitHub Actions workflows:
+
+1. **CI Workflow (`.github/workflows/ci.yml`):**
+   - Automatically runs `go vet` and all package unit tests on Pull Requests to `main`.
+2. **Release Workflow (`.github/workflows/release.yml`):**
+   - **Trigger:** Whenever `VERSION` is updated in `main` (or a `v*` tag is pushed), GitHub Actions will:
+     1. Run full unit test suites.
+     2. Cross-compile standalone CLI binaries for Windows (`.exe`), Linux (`amd64`, `arm64`), and macOS (`arm64`, `amd64`).
+     3. Package each platform archive (`.zip` / `.tar.gz`) along with documentation.
+     4. Calculate SHA256 checksums (`checksums.txt`).
+     5. Automatically create a GitHub Release with generated release notes and attach all binary packages.
+
+---
+
 ## Desktop GUI (Wails v3)
 
 The modern desktop interface is located in `cmd/nst-desktop/` with frontend sources in `frontend/`.
@@ -118,6 +134,7 @@ NST-V2/
 │   └── webui/            # Embedded Web UI and REST API server
 ├── frontend/             # React 19 + TypeScript + Vite UI for Desktop
 ├── build/                # Desktop packaging assets (Windows, macOS, Linux)
+├── VERSION               # Single source of truth for application version
 └── REMAKE_SPEC.md        # Technical specification and milestone tracker
 ```
 
