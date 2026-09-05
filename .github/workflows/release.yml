@@ -119,16 +119,27 @@ jobs:
           go-version: 'stable'
           check-latest: true
 
+      - name: Install Linux GUI Dependencies
+        if: matrix.os == 'linux' && matrix.arch == 'amd64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
       - name: Build Binary
         env:
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
-          CGO_ENABLED: 0
           VER: ${{ needs.check-and-test.outputs.version }}
         run: |
           OUTPUT_NAME="nst${{ matrix.ext }}"
           mkdir -p bin
-          go build -ldflags="-s -w -X 'main.version=${VER}'" -o "bin/${OUTPUT_NAME}" ./cmd/nst
+          # 1. Build CLI (Always Pure Go CGO_ENABLED=0)
+          CGO_ENABLED=0 go build -ldflags="-s -w -X 'main.version=${VER}'" -o "bin/${OUTPUT_NAME}" ./cmd/nst
+
+          # 2. Build Native Desktop GUI for Linux amd64
+          if [ "${{ matrix.os }}" = "linux" ] && [ "${{ matrix.arch }}" = "amd64" ]; then
+            CGO_ENABLED=1 go build -tags gtk3 -ldflags="-s -w -X 'main.version=${VER}'" -o "bin/nst-desktop" ./cmd/nst-desktop
+          fi
 
       - name: Package Archive
         id: package
@@ -141,19 +152,34 @@ jobs:
           PACKAGE_NAME="nst-v${VER}-${OS}-${ARCH}"
           mkdir -p "dist_staging/${PACKAGE_NAME}"
 
-          # Copy binary and LICENSE only
+          # Copy binaries and LICENSE
           cp bin/nst* "dist_staging/${PACKAGE_NAME}/"
           cp LICENSE "dist_staging/${PACKAGE_NAME}/"
+
+          # Include Desktop shortcut and icon for Linux
+          if [ "${OS}" = "linux" ]; then
+            cp build/appicon.png "dist_staging/${PACKAGE_NAME}/icon.png"
+            cat << 'DESKTOP_EOF' > "dist_staging/${PACKAGE_NAME}/NST.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=NST Ghost
+Comment=Novelty Translation Tool
+Exec=sh -c 'cd "$(dirname "$1")" && ./nst-desktop' dummy %k
+Icon=./icon.png
+Terminal=false
+Categories=Utility;Development;
+DESKTOP_EOF
+            chmod +x "dist_staging/${PACKAGE_NAME}/NST.desktop"
+          fi
 
           mkdir -p release_assets
           cd dist_staging
           if [ "$FORMAT" = "zip" ]; then
             sudo apt-get update && sudo apt-get install -y zip
             zip -r "../release_assets/${PACKAGE_NAME}.zip" "${PACKAGE_NAME}"
-            echo "asset_file=${PACKAGE_NAME}.zip" >> $GITHUB_ENV
           else
             tar -czvf "../release_assets/${PACKAGE_NAME}.tar.gz" "${PACKAGE_NAME}"
-            echo "asset_file=${PACKAGE_NAME}.tar.gz" >> $GITHUB_ENV
           fi
           cd ..
 
