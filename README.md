@@ -135,7 +135,7 @@ NST-V2/
 ├── frontend/             # React 19 + TypeScript + Vite UI for Desktop
 ├── build/                # Desktop packaging assets (Windows, macOS, Linux)
 ├── VERSION               # Single source of truth for application version
-└── REMAKE_SPEC.md        # Technical specification and milestone tracker
+└── LICENSE               # MIT License
 ```
 
 ---

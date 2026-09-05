@@ -16,6 +16,7 @@
 workspace.nst
 demo.nst
 test_game_translated/
+nst_translations/
 
 # Node & Frontend dependencies
 frontend/node_modules/
