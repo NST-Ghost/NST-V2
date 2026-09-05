@@ -159,17 +159,7 @@ jobs:
           # Include Desktop shortcut and icon for Linux
           if [ "${OS}" = "linux" ]; then
             cp build/appicon.png "dist_staging/${PACKAGE_NAME}/icon.png"
-            cat << 'DESKTOP_EOF' > "dist_staging/${PACKAGE_NAME}/NST.desktop"
-[Desktop Entry]
-Version=1.0
-Type=Application
-Name=NST Ghost
-Comment=Novelty Translation Tool
-Exec=sh -c 'cd "$(dirname "$1")" && ./nst-desktop' dummy %k
-Icon=./icon.png
-Terminal=false
-Categories=Utility;Development;
-DESKTOP_EOF
+            cp build/linux/NST.desktop "dist_staging/${PACKAGE_NAME}/NST.desktop"
             chmod +x "dist_staging/${PACKAGE_NAME}/NST.desktop"
           fi
 
