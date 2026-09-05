@@ -141,12 +141,9 @@ jobs:
           PACKAGE_NAME="nst-v${VER}-${OS}-${ARCH}"
           mkdir -p "dist_staging/${PACKAGE_NAME}"
 
-          # Copy binary and docs
+          # Copy binary and LICENSE only
           cp bin/nst* "dist_staging/${PACKAGE_NAME}/"
-          cp README.md LICENSE "dist_staging/${PACKAGE_NAME}/"
-          if [ -f REMAKE_SPEC.md ]; then
-            cp REMAKE_SPEC.md "dist_staging/${PACKAGE_NAME}/"
-          fi
+          cp LICENSE "dist_staging/${PACKAGE_NAME}/"
 
           mkdir -p release_assets
           cd dist_staging
