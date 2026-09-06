@@ -249,15 +249,21 @@ func (c *Client) PublishTranslation(ctx context.Context, req PublishRequest) (*P
 		return nil, fmt.Errorf("invalid upload response JSON: %w", err)
 	}
 
-	var fileKey string
-	if key, ok := uploadJSON["key"].(string); ok && key != "" {
-		fileKey = key
-	} else if fn, ok := uploadJSON["filename"].(string); ok {
-		fileKey = fn
-	}
-	downloadURL := fmt.Sprintf("%s/%s", c.StorageURL, fileKey)
-	if u, ok := uploadJSON["url"].(string); ok && u != "" {
+	var downloadURL string
+	if fu, ok := uploadJSON["full_url"].(string); ok && strings.HasPrefix(fu, "http") {
+		downloadURL = fu
+	} else if u, ok := uploadJSON["url"].(string); ok && strings.HasPrefix(u, "http") {
 		downloadURL = u
+	} else {
+		fileKey := ""
+		if key, ok := uploadJSON["key"].(string); ok && key != "" {
+			fileKey = key
+		} else if u, ok := uploadJSON["url"].(string); ok && u != "" {
+			fileKey = u
+		} else if fn, ok := uploadJSON["filename"].(string); ok {
+			fileKey = fn
+		}
+		downloadURL = fmt.Sprintf("%s/%s", c.StorageURL, strings.TrimPrefix(fileKey, "/"))
 	}
 
 	// 4. Register as pending TRANSLATION mod
