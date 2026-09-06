@@ -48,7 +48,7 @@ func NewClient(apiBase, storageURL, token string) *Client {
 	return &Client{
 		APIBase:    strings.TrimRight(apiBase, "/"),
 		StorageURL: strings.TrimRight(storageURL, "/"),
-		Token:      token,
+		Token:      strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(token), "Bearer ")),
 		HTTPClient: &http.Client{
 			Timeout: 60 * time.Second,
 		},
@@ -271,7 +271,11 @@ func (c *Client) PublishTranslation(ctx context.Context, req PublishRequest) (*P
 	}
 	payloadBytes, _ := json.Marshal(submitPayload)
 
-	submitURL := fmt.Sprintf("%s/mods/article/%s/nst-submission", c.APIBase, req.Slug)
+	apiBase := c.APIBase
+	if !strings.HasSuffix(apiBase, "/api") {
+		apiBase = apiBase + "/api"
+	}
+	submitURL := fmt.Sprintf("%s/mods/article/%s/nst-submission", apiBase, req.Slug)
 	submitReq, err := http.NewRequestWithContext(ctx, "POST", submitURL, bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create submit request: %w", err)
