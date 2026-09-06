@@ -11,6 +11,8 @@ type Options struct {
 	Model      string
 	Glossary   map[string]string
 	Prompt     string
+	Stream     bool   // Enable streaming mode (SSE)
+	Format     string // "json" (default) or "line" ([ID] ||| [Text])
 }
 
 // Result represents the outcome for a single translated text string

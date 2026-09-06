@@ -52,6 +52,9 @@ func (p *Parser) Inject(ctx context.Context, sourceDir, outputDir string, entrie
 		srcPath := filepath.Join(srcDataDir, fileName)
 		data, err := os.ReadFile(srcPath)
 		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
 			return fmt.Errorf("failed to read source file %s: %w", srcPath, err)
 		}
 

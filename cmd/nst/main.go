@@ -61,6 +61,14 @@ func main() {
 		handlePublish(os.Args[2:])
 	case "import-cache":
 		handleImportCache(os.Args[2:])
+	case "meta":
+		handleMeta(os.Args[2:])
+	case "export-patch":
+		handleExportPatch(os.Args[2:])
+	case "import-patch":
+		handleImportPatch(os.Args[2:])
+	case "apply-patch":
+		handleApplyPatch(os.Args[2:])
 	case "version", "-v", "--version":
 		fmt.Printf("NST CLI %s\n", version)
 	case "help", "-h", "--help":
@@ -79,19 +87,23 @@ Usage:
   nst <command> [arguments]
 
 Commands:
-  app        Launch the NST Desktop Window Application (standalone native window)
-  ui         Launch the interactive Web Dashboard in browser (recommended)
-  extract    Extract translatable texts from a game into a .nst workspace file
-  translate  Translate extracted texts using AI or Translation APIs
-  inject     Apply translated texts back into game files
-  deploy     Export non-destructive runtime translation mod
-  merge      Merge existing translations into an updated game version
-  projects   List registered projects and translation progress
-  providers  List built-in and external custom translation providers
-  status     Show translation statistics of a workspace
-  publish    Compress and publish translation mod to Chanomhub
-  mcp        Start the Model Context Protocol (MCP) server over stdio
-  version    Show version info
+  app          Launch the NST Desktop Window Application (standalone native window)
+  ui           Launch the interactive Web Dashboard in browser (recommended)
+  extract      Extract translatable texts from a game into a .nst workspace file
+  translate    Translate extracted texts using AI or Translation APIs
+  inject       Apply translated texts back into game files
+  deploy       Export non-destructive runtime translation mod
+  merge        Merge existing translations into an updated game version
+  projects     List registered projects and translation progress
+  providers    List built-in and external custom translation providers
+  status       Show translation statistics of a workspace
+  publish      Compress and publish translation mod to Chanomhub
+  meta         Manage workspace metadata (Chanomhub slug, game version, tags)
+  export-patch Export translated workspace to ultra-compact distribution patch (.patch.json.gz)
+  import-patch Re-hydrate/merge distribution patch into workspace and TM cache (0 API cost)
+  apply-patch  Directly install distribution patch onto a game folder without workspace
+  mcp          Start the Model Context Protocol (MCP) server over stdio
+  version      Show version info
 
 Examples:
   nst ui
@@ -147,7 +159,29 @@ func handleTranslate(args []string) {
 	tgtLang := fs.String("target", "Thai", "Target language")
 	batchSize := fs.Int("batch-size", 10, "Batch size")
 	concurrency := fs.Int("concurrency", 4, "Number of concurrent workers")
+	streamMode := fs.Bool("stream", false, "Use streaming line-by-line mode (SSE)")
+	formatMode := fs.String("format", "json", "Translation format: 'json' (default) or 'line' ([ID] ||| [Text])")
+	timeout := fs.Duration("timeout", 60*time.Second, "API request timeout (e.g. 60s, 300s)")
+	megaBatch := fs.Bool("mega-batch", false, "Enable mega-batch streaming preset (stream=true, format=line, timeout=300s, batch-size=300)")
 	fs.Parse(args)
+
+	if *megaBatch {
+		if !*streamMode {
+			*streamMode = true
+		}
+		if *formatMode == "json" {
+			*formatMode = "line"
+		}
+		if *batchSize == 10 {
+			*batchSize = 300
+		}
+		if *timeout == 60*time.Second {
+			*timeout = 300 * time.Second
+		}
+		if *concurrency == 4 {
+			*concurrency = 1
+		}
+	}
 
 	ws, err := app.Open(*wsPath)
 	if err != nil {
@@ -161,6 +195,9 @@ func handleTranslate(args []string) {
 	fmt.Printf("   Language:    %s -> %s\n", *srcLang, *tgtLang)
 	fmt.Printf("   Batch Size:  %d\n", *batchSize)
 	fmt.Printf("   Concurrency: %d workers\n", *concurrency)
+	if *streamMode || *megaBatch {
+		fmt.Printf("   Mode:        STREAMING (Format: %s, Timeout: %v)\n", *formatMode, *timeout)
+	}
 	fmt.Println("------------------------------------------")
 
 	startTime := time.Now()
@@ -172,12 +209,15 @@ func handleTranslate(args []string) {
 			APIKey:  *apiKey,
 			Model:   *modelName,
 			BaseURL: *baseURL,
+			Timeout: *timeout,
 		},
 		SourceLang:  *srcLang,
 		TargetLang:  *tgtLang,
 		BatchSize:   *batchSize,
 		Concurrency: *concurrency,
 		Scope:       "all",
+		Stream:      *streamMode,
+		Format:      *formatMode,
 	}, func(p model.TranslationProgress) {
 		fmt.Printf("\r⏳ Progress: %5.1f%% (%d/%d) | Current: %-25s",
 			p.Percent, p.Completed, p.Total, p.CurrentFile)
@@ -449,27 +489,38 @@ func handleMCP(args []string) {
 
 func handlePublish(args []string) {
 	fs := flag.NewFlagSet("publish", flag.ExitOnError)
-	gamePath := fs.String("path", "", "Path to game folder containing nst_translations/ (required)")
-	slug := fs.String("slug", "", "Chanomhub game article slug (required)")
+	wsPath := fs.String("workspace", "", "Path to .nst workspace file")
+	patchPath := fs.String("patch", "", "Path to .patch.json.gz distribution package")
+	gamePath := fs.String("path", "", "Legacy path to game folder containing nst_translations/")
+	slug := fs.String("slug", "", "Chanomhub game article slug (optional if stored in workspace)")
 	token := fs.String("token", os.Getenv("CHANOMHUB_TOKEN"), "Chanomhub API token (or CHANOMHUB_TOKEN env)")
-	lang := fs.String("lang", "Thai", "Target language name")
+	lang := fs.String("lang", "", "Target language name")
+	credit := fs.String("credit", "NST", "Credit to translator/group")
 	apiBase := fs.String("api-base", "", "Custom API base URL")
 	storageURL := fs.String("storage-url", "", "Custom storage URL")
 	fs.Parse(args)
 
-	if *gamePath == "" || *slug == "" || *token == "" {
-		fmt.Println("Error: -path, -slug, and -token are required")
+	if *wsPath == "" && *patchPath == "" && *gamePath == "" {
+		fmt.Println("Error: -workspace, -patch, or -path is required")
+		fs.Usage()
+		os.Exit(1)
+	}
+	if *token == "" {
+		fmt.Println("Error: -token (or CHANOMHUB_TOKEN env variable) is required")
 		fs.Usage()
 		os.Exit(1)
 	}
 
-	fmt.Printf("📦 Compressing translations and publishing to Chanomhub for [%s]...\n", *slug)
+	fmt.Println("📦 Publishing translation mod to Chanomhub...")
 	ctx := context.Background()
 	res, err := app.Publish(ctx, app.PublishOptions{
+		Workspace:  *wsPath,
+		PatchFile:  *patchPath,
 		GameDir:    *gamePath,
 		Slug:       *slug,
 		Token:      *token,
 		Language:   *lang,
+		CreditTo:   *credit,
 		APIBase:    *apiBase,
 		StorageURL: *storageURL,
 	})
@@ -480,7 +531,7 @@ func handlePublish(args []string) {
 
 	fmt.Printf("✅ %s\n", res.Message)
 	fmt.Printf("   Download URL: %s\n", res.DownloadURL)
-	fmt.Printf("   Archive Size: %d bytes\n", res.FileSizeBytes)
+	fmt.Printf("   Archive Size: %d bytes (%.2f KB)\n", res.FileSizeBytes, float64(res.FileSizeBytes)/1024.0)
 }
 
 func handleImportCache(args []string) {
@@ -561,4 +612,195 @@ func handleImportCache(args []string) {
 	fmt.Printf("   Workspace entries translated: %d\n", updatedEntries)
 	fmt.Println("------------------------------------------")
 }
+
+type metaSliceFlags []string
+
+func (s *metaSliceFlags) String() string {
+	return strings.Join(*s, ", ")
+}
+
+func (s *metaSliceFlags) Set(val string) error {
+	*s = append(*s, val)
+	return nil
+}
+
+func handleMeta(args []string) {
+	fs := flag.NewFlagSet("meta", flag.ExitOnError)
+	wsPath := fs.String("workspace", "", "Path to .nst workspace file (required)")
+	var setFlags metaSliceFlags
+	fs.Var(&setFlags, "set", "Set metadata key=value (can be used multiple times)")
+	getKey := fs.String("get", "", "Get value of a specific metadata key")
+	listAll := fs.Bool("list", false, "List all metadata key-values")
+	fs.Parse(args)
+
+	if *wsPath == "" {
+		fmt.Println("Error: -workspace is required")
+		fs.Usage()
+		os.Exit(1)
+	}
+
+	ws, err := app.Open(*wsPath)
+	if err != nil {
+		fmt.Printf("Failed to open workspace: %v\n", err)
+		os.Exit(1)
+	}
+	defer ws.Close()
+
+	if len(setFlags) > 0 {
+		for _, pair := range setFlags {
+			parts := strings.SplitN(pair, "=", 2)
+			if len(parts) != 2 {
+				fmt.Printf("Warning: ignoring invalid metadata pair (expected key=value): %s\n", pair)
+				continue
+			}
+			k, v := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+			if err := ws.SetMetadata(k, v); err != nil {
+				fmt.Printf("Failed to set metadata %s: %v\n", k, err)
+			} else {
+				fmt.Printf("✓ Set metadata: %s = %s\n", k, v)
+			}
+		}
+	}
+
+	if *getKey != "" {
+		val, found, err := ws.GetMetadata(*getKey)
+		if err != nil {
+			fmt.Printf("Failed to get metadata: %v\n", err)
+		} else if !found {
+			fmt.Printf("Metadata key '%s' not found\n", *getKey)
+		} else {
+			fmt.Printf("%s = %s\n", *getKey, val)
+		}
+	}
+
+	if *listAll || (len(setFlags) == 0 && *getKey == "") {
+		meta, err := ws.GetAllMetadata()
+		if err != nil {
+			fmt.Printf("Failed to list metadata: %v\n", err)
+			return
+		}
+		fmt.Println("------------------------------------------")
+		fmt.Printf("Workspace Metadata (%s):\n", *wsPath)
+		if len(meta) == 0 {
+			fmt.Println("  (No metadata set)")
+		} else {
+			for k, v := range meta {
+				fmt.Printf("  %-22s: %s\n", k, v)
+			}
+		}
+		fmt.Println("------------------------------------------")
+	}
+}
+
+func handleExportPatch(args []string) {
+	fs := flag.NewFlagSet("export-patch", flag.ExitOnError)
+	wsPath := fs.String("workspace", "", "Path to .nst workspace file (required)")
+	outputPath := fs.String("output", "", "Output path for patch file (default: <workspace>.patch.json.gz)")
+	fs.Parse(args)
+
+	if *wsPath == "" {
+		fmt.Println("Error: -workspace is required")
+		fs.Usage()
+		os.Exit(1)
+	}
+
+	ws, err := app.Open(*wsPath)
+	if err != nil {
+		fmt.Printf("Failed to open workspace: %v\n", err)
+		os.Exit(1)
+	}
+	defer ws.Close()
+
+	fmt.Printf("📦 Exporting distribution patch from %s ...\n", *wsPath)
+	pkg, actualPath, err := ws.ExportPatch(*outputPath)
+	if err != nil {
+		fmt.Printf("Export failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fi, err := os.Stat(actualPath)
+	var sizeBytes int64
+	if err == nil {
+		sizeBytes = fi.Size()
+	}
+
+	fmt.Println("------------------------------------------")
+	fmt.Printf("✅ Distribution patch exported successfully!\n")
+	fmt.Printf("   Output File      : %s\n", actualPath)
+	fmt.Printf("   File Size        : %d bytes (%.2f KB)\n", sizeBytes, float64(sizeBytes)/1024.0)
+	fmt.Printf("   Engine           : %s\n", pkg.Engine)
+	fmt.Printf("   Game Title       : %s\n", pkg.GameTitle)
+	fmt.Printf("   Game Version     : %s\n", pkg.GameVersion)
+	fmt.Printf("   Chanomhub Slug   : %s\n", pkg.ChanomhubSlug)
+	fmt.Printf("   Translated Count : %d / %d\n", pkg.Stats.TranslatedEntries, pkg.Stats.TotalEntries)
+	fmt.Printf("   Unique Texts     : %d\n", pkg.Stats.UniqueTexts)
+	fmt.Println("------------------------------------------")
+}
+
+func handleImportPatch(args []string) {
+	fs := flag.NewFlagSet("import-patch", flag.ExitOnError)
+	wsPath := fs.String("workspace", "", "Path to target .nst workspace file (required)")
+	patchPath := fs.String("patch", "", "Path to .patch.json or .patch.json.gz file (required)")
+	fs.Parse(args)
+
+	if *wsPath == "" || *patchPath == "" {
+		fmt.Println("Error: -workspace and -patch are required")
+		fs.Usage()
+		os.Exit(1)
+	}
+
+	ws, err := app.Open(*wsPath)
+	if err != nil {
+		fmt.Printf("Failed to open workspace: %v\n", err)
+		os.Exit(1)
+	}
+	defer ws.Close()
+
+	fmt.Printf("🔄 Importing & re-hydrating patch [%s] into [%s] ...\n", *patchPath, *wsPath)
+	stats, err := ws.ImportPatch(*patchPath)
+	if err != nil {
+		fmt.Printf("Import failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("------------------------------------------")
+	fmt.Printf("✅ Distribution patch imported & TM cache populated!\n")
+	fmt.Printf("   Exact Key Matches   : %d (100%% reused, $0.00)\n", stats.ExactMatches)
+	fmt.Printf("   Fuzzy TM Matches    : %d (re-aligned strings, $0.00)\n", stats.FuzzyMatches)
+	fmt.Printf("   Remaining Unmatched : %d (new strings to translate)\n", stats.NewUntranslated)
+	fmt.Printf("   Obsolete in Game    : %d\n", stats.ObsoleteCount)
+	fmt.Println("------------------------------------------")
+}
+
+func handleApplyPatch(args []string) {
+	fs := flag.NewFlagSet("apply-patch", flag.ExitOnError)
+	gameDir := fs.String("game", "", "Path to game directory to patch (required)")
+	patchPath := fs.String("patch", "", "Path to .patch.json or .patch.json.gz file (required)")
+	outDir := fs.String("output", "", "Optional target output directory (defaults to modifying game in-place)")
+	fs.Parse(args)
+
+	if *gameDir == "" || *patchPath == "" {
+		fmt.Println("Error: -game and -patch are required")
+		fs.Usage()
+		os.Exit(1)
+	}
+
+	dest := *outDir
+	if dest == "" {
+		dest = *gameDir
+	}
+
+	fmt.Printf("⚡ Directly applying patch [%s] to game [%s] ...\n", *patchPath, dest)
+	ctx := context.Background()
+	if err := app.ApplyPatch(ctx, *patchPath, *gameDir, dest); err != nil {
+		fmt.Printf("Apply patch failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("------------------------------------------")
+	fmt.Printf("✅ Patch applied directly to game successfully!\n")
+	fmt.Printf("   Target Directory: %s\n", dest)
+	fmt.Println("------------------------------------------")
+}
+
 

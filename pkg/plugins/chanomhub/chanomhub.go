@@ -57,11 +57,15 @@ func NewClient(apiBase, storageURL, token string) *Client {
 
 // PublishRequest holds parameters for publishing a translation mod
 type PublishRequest struct {
-	GameDir  string `json:"game_dir"`
-	Slug     string `json:"slug"`
-	Language string `json:"language"`
-	Engine   string `json:"engine"`
-	CreditTo string `json:"credit_to"`
+	Workspace   string                 `json:"workspace,omitempty"`
+	PatchFile   string                 `json:"patch_file,omitempty"`
+	GameDir     string                 `json:"game_dir,omitempty"`
+	Slug        string                 `json:"slug"`
+	Language    string                 `json:"language"`
+	Engine      string                 `json:"engine"`
+	CreditTo    string                 `json:"credit_to"`
+	GameVersion string                 `json:"game_version,omitempty"`
+	Config      map[string]interface{} `json:"config,omitempty"`
 }
 
 // PublishResult contains response details from Chanomhub
@@ -160,35 +164,57 @@ func (c *Client) PublishTranslation(ctx context.Context, req PublishRequest) (*P
 		req.CreditTo = "NST"
 	}
 
-	// 1. Locate translations directory
-	transDir := filepath.Join(req.GameDir, "nst_translations")
-	if fi, err := os.Stat(transDir); err != nil || !fi.IsDir() {
-		// Fallback: check if gameDir itself has config.json or translations
-		if _, err := os.Stat(filepath.Join(req.GameDir, "config.json")); err == nil {
-			transDir = req.GameDir
-		} else {
-			return nil, fmt.Errorf("no 'nst_translations' directory found in %s", req.GameDir)
+	var uploadFilePath string
+	var uploadFileName string
+	var fileSize int64
+	var isTempFile bool
+
+	if req.PatchFile != "" {
+		fi, err := os.Stat(req.PatchFile)
+		if err != nil {
+			return nil, fmt.Errorf("patch file does not exist: %s", req.PatchFile)
 		}
+		uploadFilePath = req.PatchFile
+		uploadFileName = filepath.Base(req.PatchFile)
+		fileSize = fi.Size()
+	} else {
+		// 1. Locate legacy translations directory
+		transDir := filepath.Join(req.GameDir, "nst_translations")
+		if fi, err := os.Stat(transDir); err != nil || !fi.IsDir() {
+			// Fallback: check if gameDir itself has config.json or translations
+			if _, err := os.Stat(filepath.Join(req.GameDir, "config.json")); err == nil {
+				transDir = req.GameDir
+			} else {
+				return nil, fmt.Errorf("no patch file specified and no 'nst_translations' directory found in %s", req.GameDir)
+			}
+		}
+
+		// 2. Compress into temporary zip
+		tempZip := filepath.Join(os.TempDir(), fmt.Sprintf("nst_pack_%d.zip", time.Now().UnixMilli()))
+		isTempFile = true
+		uploadFilePath = tempZip
+		uploadFileName = filepath.Base(tempZip)
+
+		sz, err := ZipDirectory(transDir, tempZip)
+		if err != nil {
+			return nil, fmt.Errorf("failed to pack translations: %w", err)
+		}
+		fileSize = sz
 	}
 
-	// 2. Compress into temporary zip
-	tempZip := filepath.Join(os.TempDir(), fmt.Sprintf("nst_pack_%d.zip", time.Now().UnixMilli()))
-	defer os.Remove(tempZip)
-
-	fileSize, err := ZipDirectory(transDir, tempZip)
-	if err != nil {
-		return nil, fmt.Errorf("failed to pack translations: %w", err)
+	if isTempFile {
+		defer os.Remove(uploadFilePath)
 	}
 
-	// 3. Upload archive to storage service (GOR2-compatible POST /upload)
-	fileBytes, err := os.ReadFile(tempZip)
+	// 3. Upload archive to storage service (GOR2-compatible POST /upload?bucket=storage&game=<slug>)
+	fileBytes, err := os.ReadFile(uploadFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read packed zip: %w", err)
+		return nil, fmt.Errorf("failed to read upload file: %w", err)
 	}
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-	part, err := writer.CreateFormFile("file", filepath.Base(tempZip))
+	part, err := writer.CreateFormFile("file", uploadFileName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create form file: %w", err)
 	}
@@ -199,7 +225,7 @@ func (c *Client) PublishTranslation(ctx context.Context, req PublishRequest) (*P
 		return nil, fmt.Errorf("failed to close multipart writer: %w", err)
 	}
 
-	uploadURL := c.StorageURL + "/upload"
+	uploadURL := fmt.Sprintf("%s/upload?bucket=storage&game=%s", c.StorageURL, req.Slug)
 	uploadReq, err := http.NewRequestWithContext(ctx, "POST", uploadURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create upload request: %w", err)
@@ -241,6 +267,7 @@ func (c *Client) PublishTranslation(ctx context.Context, req PublishRequest) (*P
 		"engine":        req.Engine,
 		"creditTo":      req.CreditTo,
 		"fileSizeBytes": fileSize,
+		"config":        req.Config,
 	}
 	payloadBytes, _ := json.Marshal(submitPayload)
 

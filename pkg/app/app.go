@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"nst-go/pkg/merger"
 	"nst-go/pkg/model"
 	"nst-go/pkg/parser"
+	"nst-go/pkg/patch"
 	"nst-go/pkg/pipeline"
 	"nst-go/pkg/plugins/chanomhub"
 	"nst-go/pkg/registry"
@@ -26,10 +28,11 @@ import (
 
 // ProviderConfig holds configuration for constructing a translator provider
 type ProviderConfig struct {
-	Name    string `json:"name"` // "mock", "gemini", "openai", "google"
-	APIKey  string `json:"api_key"`
-	Model   string `json:"model"`
-	BaseURL string `json:"base_url"`
+	Name    string        `json:"name"` // "mock", "gemini", "openai", "google"
+	APIKey  string        `json:"api_key"`
+	Model   string        `json:"model"`
+	BaseURL string        `json:"base_url"`
+	Timeout time.Duration `json:"timeout,omitempty"`
 }
 
 // TranslateOptions configures a batch translation run
@@ -40,16 +43,21 @@ type TranslateOptions struct {
 	BatchSize   int            `json:"batch_size"`
 	Concurrency int            `json:"concurrency"`
 	Scope       string         `json:"scope"` // "all", "untranslated", or file path
+	Stream      bool           `json:"stream,omitempty"`
+	Format      string         `json:"format,omitempty"` // "json" (default) or "line"
 }
 
 // PublishOptions configures translation mod publishing to Chanomhub
 type PublishOptions struct {
-	GameDir    string `json:"game_dir"`
-	Slug       string `json:"slug"`
+	Workspace  string `json:"workspace,omitempty"`
+	PatchFile  string `json:"patch_file,omitempty"`
+	GameDir    string `json:"game_dir,omitempty"`
+	Slug       string `json:"slug,omitempty"`
 	Token      string `json:"token"`
-	Language   string `json:"language"`
-	APIBase    string `json:"api_base"`
-	StorageURL string `json:"storage_url"`
+	Language   string `json:"language,omitempty"`
+	CreditTo   string `json:"credit_to,omitempty"`
+	APIBase    string `json:"api_base,omitempty"`
+	StorageURL string `json:"storage_url,omitempty"`
 }
 
 // Workspace manages an open translation project workspace (.nst)
@@ -202,6 +210,27 @@ func (w *Workspace) Stats() (storage.WorkspaceStats, error) {
 	return w.store.Stats()
 }
 
+// SetMetadata saves or updates metadata key-value on the workspace
+func (w *Workspace) SetMetadata(key, value string) error {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.store.SetMetadata(key, value)
+}
+
+// GetMetadata retrieves a metadata value by key
+func (w *Workspace) GetMetadata(key string) (string, bool, error) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.store.GetMetadata(key)
+}
+
+// GetAllMetadata returns all workspace metadata
+func (w *Workspace) GetAllMetadata() (map[string]string, error) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.store.GetAllMetadata()
+}
+
 // ListFiles returns summary stats per file
 func (w *Workspace) ListFiles() ([]storage.FileSummary, error) {
 	w.mu.RLock()
@@ -289,6 +318,8 @@ func (w *Workspace) Translate(ctx context.Context, opts TranslateOptions, progre
 		SourceLang: srcLang,
 		TargetLang: tgtLang,
 		Model:      opts.Provider.Model,
+		Stream:     opts.Stream,
+		Format:     opts.Format,
 	}
 
 	_, err = pipe.Run(ctx, entries, tOpts, progressCb)
@@ -492,6 +523,7 @@ func CreateTranslator(cfg ProviderConfig) (translator.Translator, error) {
 			APIKey:  cfg.APIKey,
 			BaseURL: cfg.BaseURL,
 			Model:   cfg.Model,
+			Timeout: cfg.Timeout,
 		}), nil
 	case "google":
 		return google.New(google.Config{
@@ -508,14 +540,259 @@ func CreateTranslator(cfg ProviderConfig) (translator.Translator, error) {
 
 // Publish uploads a translation mod to Chanomhub
 func Publish(ctx context.Context, opts PublishOptions) (*chanomhub.PublishResult, error) {
-	if opts.GameDir == "" || opts.Slug == "" || opts.Token == "" {
-		return nil, fmt.Errorf("game_dir, slug, and token are required to publish")
+	if opts.Token == "" {
+		return nil, fmt.Errorf("token is required to publish")
+	}
+
+	var patchFileToUpload string
+	var tempPatchToDelete string
+	engine := "rpgm"
+	slug := opts.Slug
+	lang := opts.Language
+	credit := opts.CreditTo
+	gameVersion := "1.0.0"
+	var configData map[string]interface{}
+
+	if opts.Workspace != "" {
+		ws, err := Open(opts.Workspace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open workspace: %w", err)
+		}
+		defer ws.Close()
+
+		meta, _ := ws.GetAllMetadata()
+		if slug == "" {
+			slug = meta["chanomhub_slug"]
+		}
+		if lang == "" {
+			if tl, ok := meta["target_lang"]; ok && tl != "" {
+				lang = tl
+			} else if ws.project != nil {
+				lang = ws.project.TargetLang
+			}
+		}
+		if gv, ok := meta["game_version"]; ok && gv != "" {
+			gameVersion = gv
+		}
+		if ws.project != nil && ws.project.Engine != "" {
+			engine = ws.project.Engine
+		}
+
+		// Export patch to temp file
+		tempPatch := filepath.Join(os.TempDir(), fmt.Sprintf("chanomhub_patch_%d.patch.json.gz", time.Now().UnixMilli()))
+		pkg, _, err := ws.ExportPatch(tempPatch)
+		if err != nil {
+			return nil, fmt.Errorf("failed to export patch for publishing: %w", err)
+		}
+		patchFileToUpload = tempPatch
+		tempPatchToDelete = tempPatch
+
+		configData = map[string]interface{}{
+			"format":             "patch.json.gz",
+			"game_version":       gameVersion,
+			"total_entries":      pkg.Stats.TotalEntries,
+			"translated_entries": pkg.Stats.TranslatedEntries,
+			"unique_texts":       pkg.Stats.UniqueTexts,
+		}
+	} else if opts.PatchFile != "" {
+		patchFileToUpload = opts.PatchFile
+		pkg, err := patch.LoadPatch(opts.PatchFile)
+		if err == nil {
+			if slug == "" {
+				slug = pkg.ChanomhubSlug
+			}
+			if lang == "" {
+				lang = pkg.TargetLang
+			}
+			if pkg.Engine != "" {
+				engine = pkg.Engine
+			}
+			if pkg.GameVersion != "" {
+				gameVersion = pkg.GameVersion
+			}
+			configData = map[string]interface{}{
+				"format":             "patch.json.gz",
+				"game_version":       gameVersion,
+				"total_entries":      pkg.Stats.TotalEntries,
+				"translated_entries": pkg.Stats.TranslatedEntries,
+				"unique_texts":       pkg.Stats.UniqueTexts,
+			}
+		}
+	}
+
+	if tempPatchToDelete != "" {
+		defer os.Remove(tempPatchToDelete)
+	}
+
+	if slug == "" {
+		return nil, fmt.Errorf("slug is required (specify -slug or set 'chanomhub_slug' in workspace metadata)")
+	}
+	if patchFileToUpload == "" && opts.GameDir == "" {
+		return nil, fmt.Errorf("either -workspace, -patch, or -path (game directory) is required to publish")
 	}
 
 	client := chanomhub.NewClient(opts.APIBase, opts.StorageURL, opts.Token)
 	return client.PublishTranslation(ctx, chanomhub.PublishRequest{
-		GameDir:  opts.GameDir,
-		Slug:     opts.Slug,
-		Language: opts.Language,
+		PatchFile:   patchFileToUpload,
+		GameDir:     opts.GameDir,
+		Slug:        slug,
+		Language:    lang,
+		Engine:      engine,
+		CreditTo:    credit,
+		GameVersion: gameVersion,
+		Config:      configData,
 	})
 }
+
+// ExportPatch exports translated entries into a lightweight distribution patch package (.patch.json.gz)
+func (w *Workspace) ExportPatch(outputPath string) (*patch.PatchPackage, string, error) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	proj := w.project
+	if proj == nil {
+		return nil, "", fmt.Errorf("project metadata not found in workspace")
+	}
+
+	meta, err := w.store.GetAllMetadata()
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to retrieve metadata: %w", err)
+	}
+
+	gameTitle := proj.Name
+	if gt, ok := meta["game_title"]; ok && gt != "" {
+		gameTitle = gt
+	}
+	gameVersion := "1.0.0"
+	if gv, ok := meta["game_version"]; ok && gv != "" {
+		gameVersion = gv
+	}
+	slug := ""
+	if s, ok := meta["chanomhub_slug"]; ok {
+		slug = s
+	}
+
+	entries, err := w.store.GetEntries("all")
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to load entries: %w", err)
+	}
+
+	var patchEntries []patch.PatchEntry
+	uniqueMap := make(map[string]bool)
+	translatedCount := 0
+
+	for _, e := range entries {
+		if e.Target != "" && e.Target != e.Source && e.Status != model.StatusUntranslated {
+			patchEntries = append(patchEntries, patch.PatchEntry{
+				FilePath: e.FilePath,
+				KeyPath:  e.KeyPath,
+				Source:   e.Source,
+				Target:   e.Target,
+			})
+			uniqueMap[e.Source] = true
+			translatedCount++
+		}
+	}
+
+	if outputPath == "" {
+		baseName := strings.TrimSuffix(filepath.Base(w.path), filepath.Ext(w.path))
+		if baseName == "" {
+			baseName = "distribution"
+		}
+		outputPath = filepath.Join(filepath.Dir(w.path), baseName+".patch.json.gz")
+	}
+
+	pkg := &patch.PatchPackage{
+		FormatVersion: "1.0",
+		Engine:        proj.Engine,
+		GameTitle:     gameTitle,
+		GameVersion:   gameVersion,
+		ChanomhubSlug: slug,
+		SourceLang:    proj.SourceLang,
+		TargetLang:    proj.TargetLang,
+		CreatedAt:     time.Now().UTC(),
+		Metadata:      meta,
+		Stats: patch.PatchStats{
+			TotalEntries:      len(entries),
+			TranslatedEntries: translatedCount,
+			UniqueTexts:       len(uniqueMap),
+		},
+		Entries: patchEntries,
+	}
+
+	if err := patch.SavePatch(pkg, outputPath); err != nil {
+		return nil, "", err
+	}
+
+	return pkg, outputPath, nil
+}
+
+// ImportPatch merges a distribution patch into the workspace, populates TM cache, and restores translations
+func (w *Workspace) ImportPatch(patchPath string) (*merger.MergeStats, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	pkg, err := patch.LoadPatch(patchPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load patch: %w", err)
+	}
+
+	// 1. Populate TM cache from all patch entries
+	srcLang := w.project.SourceLang
+	if srcLang == "" {
+		srcLang = pkg.SourceLang
+	}
+	tgtLang := w.project.TargetLang
+	if tgtLang == "" {
+		tgtLang = pkg.TargetLang
+	}
+
+	for _, pe := range pkg.Entries {
+		if pe.Target != "" {
+			_ = w.store.SetCache(pe.Source, pe.Target, srcLang, tgtLang, "patch_import")
+		}
+	}
+
+	// 2. Fetch current workspace entries
+	currentEntries, err := w.store.GetEntries("all")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read workspace entries: %w", err)
+	}
+
+	// Convert patch entries to model.TextEntry
+	patchModelEntries := pkg.ToModelEntries()
+
+	// 3. Merge entries using Merger
+	m := merger.New()
+	mergedEntries, stats := m.MergeEntries(patchModelEntries, currentEntries)
+
+	// 4. Save merged entries to storage
+	if err := w.store.UpdateEntriesTargetBatch(mergedEntries); err != nil {
+		return nil, fmt.Errorf("failed to save merged entries: %w", err)
+	}
+
+	// 5. Populate workspace metadata if not already set
+	if pkg.ChanomhubSlug != "" {
+		if _, exists, _ := w.store.GetMetadata("chanomhub_slug"); !exists {
+			_ = w.store.SetMetadata("chanomhub_slug", pkg.ChanomhubSlug)
+		}
+	}
+	if pkg.GameTitle != "" {
+		if _, exists, _ := w.store.GetMetadata("game_title"); !exists {
+			_ = w.store.SetMetadata("game_title", pkg.GameTitle)
+		}
+	}
+	if pkg.GameVersion != "" {
+		if _, exists, _ := w.store.GetMetadata("game_version"); !exists {
+			_ = w.store.SetMetadata("game_version", pkg.GameVersion)
+		}
+	}
+
+	return &stats, nil
+}
+
+// ApplyPatch applies a distribution patch directly to a game folder without requiring a workspace
+func ApplyPatch(ctx context.Context, patchPath, gameDir, outDir string) error {
+	return patch.ApplyPatchToGame(ctx, patchPath, gameDir, outDir)
+}
+

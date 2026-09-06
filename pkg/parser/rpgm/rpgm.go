@@ -149,7 +149,8 @@ func (p *Parser) Extract(ctx context.Context, dir string) ([]model.TextEntry, *m
 	uniqueSet := make(map[string]bool)
 
 	for _, file := range files {
-		if file.IsDir() || !strings.HasSuffix(strings.ToLower(file.Name()), ".json") {
+		lowerName := strings.ToLower(file.Name())
+		if file.IsDir() || !strings.HasSuffix(lowerName, ".json") || lowerName == "tilesets.json" || lowerName == "animations.json" {
 			continue
 		}
 
@@ -228,20 +229,8 @@ func (p *Parser) extractFromNode(node interface{}, entries *[]model.TextEntry, f
 			if paramsVal, hasParams := v["parameters"]; hasParams {
 				if codeNum, ok := toInt64(codeVal); ok {
 					if params, ok := paramsVal.([]interface{}); ok {
-						if p.extractFromEventCommand(codeNum, params, entries, fileName, keyPath) {
-							// Continue scanning other fields except parameters/code/indent
-							for k, subVal := range v {
-								if k == "parameters" || k == "code" || k == "indent" {
-									continue
-								}
-								newPath := k
-								if keyPath != "" {
-									newPath = keyPath + "." + k
-								}
-								p.extractFromNode(subVal, entries, fileName, newPath)
-							}
-							return
-						}
+						p.extractFromEventCommand(codeNum, params, entries, fileName, keyPath)
+						return
 					}
 				}
 			}

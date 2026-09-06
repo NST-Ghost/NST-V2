@@ -1,12 +1,15 @@
 package openai
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,7 +37,7 @@ func New(cfg Config) *Client {
 		cfg.Model = "gpt-4o-mini"
 	}
 	if cfg.Timeout == 0 {
-		cfg.Timeout = 60 * time.Second
+		cfg.Timeout = 120 * time.Second
 	}
 	return &Client{
 		cfg: cfg,
@@ -70,9 +73,35 @@ type chatResponse struct {
 	} `json:"error,omitempty"`
 }
 
+type streamChatRequest struct {
+	Model       string        `json:"model"`
+	Messages    []chatMessage `json:"messages"`
+	Temperature float64       `json:"temperature"`
+	Stream      bool          `json:"stream"`
+}
+
+type streamDelta struct {
+	Role             string `json:"role"`
+	Content          string `json:"content"`
+	ReasoningContent string `json:"reasoning_content"`
+}
+
+type streamChoice struct {
+	Delta streamDelta `json:"delta"`
+	Index int         `json:"index"`
+}
+
+type streamChunk struct {
+	Choices []streamChoice `json:"choices"`
+}
+
 func (c *Client) Translate(ctx context.Context, texts []string, opts translator.Options) ([]translator.Result, error) {
 	if len(texts) == 0 {
 		return nil, nil
+	}
+
+	if opts.Stream || opts.Format == "line" {
+		return c.translateStream(ctx, texts, opts)
 	}
 
 	systemPrompt := fmt.Sprintf(
@@ -173,3 +202,187 @@ func (c *Client) Translate(ctx context.Context, texts []string, opts translator.
 
 	return results, nil
 }
+
+func (c *Client) translateStream(ctx context.Context, texts []string, opts translator.Options) ([]translator.Result, error) {
+	if len(texts) == 0 {
+		return nil, nil
+	}
+
+	modelName := c.cfg.Model
+	if opts.Model != "" {
+		modelName = opts.Model
+	}
+
+	systemPrompt := fmt.Sprintf(
+		"You are an expert master game localizer translating from %s to %s.\n\n"+
+			"STRICT RULES:\n"+
+			"1. Output format MUST be EXACTLY line-by-line: [ID] ||| [Translation]\n"+
+			"2. Do NOT output markdown code blocks (NO ```), explanations, or notes. Output ONLY the numbered lines.\n"+
+			"3. Preserve all special tokens and tags like __NST_TAG_0__, __NST_TAG_1__ EXACTLY as they are without modifying or dropping them.\n"+
+			"4. Translate every single numbered item sequentially without skipping.",
+		opts.SourceLang, opts.TargetLang,
+	)
+
+	var sb strings.Builder
+	sb.WriteString("Translate each of the following lines sequentially. Output ONLY '[ID] ||| [Translation]':\n\n")
+	for i, text := range texts {
+		flat := strings.ReplaceAll(text, "\r\n", "\\n")
+		flat = strings.ReplaceAll(flat, "\n", "\\n")
+		flat = strings.ReplaceAll(flat, "\r", "\\n")
+		sb.WriteString(fmt.Sprintf("%d ||| %s\n", i+1, flat))
+	}
+
+	reqBody := streamChatRequest{
+		Model: modelName,
+		Messages: []chatMessage{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: sb.String()},
+		},
+		Temperature: 0.3,
+		Stream:      true,
+	}
+
+	reqBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	url := strings.TrimRight(c.cfg.BaseURL, "/") + "/chat/completions"
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqBytes))
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "text/event-stream")
+	if c.cfg.APIKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
+	}
+	for k, v := range c.cfg.Headers {
+		httpReq.Header.Set(k, v)
+	}
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("request to LLM streaming backend failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("api error (status %d): %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	contentMap := make(map[int]string)
+	reasoningMap := make(map[int]string)
+
+	lineRe := regexp.MustCompile(`^(\d+)\s*\|\|\|\s*(.*)$`)
+
+	reader := bufio.NewReader(resp.Body)
+	var contentLineBuf strings.Builder
+	var reasoningLineBuf strings.Builder
+
+	for {
+		lineBytes, err := reader.ReadBytes('\n')
+		if len(lineBytes) > 0 {
+			line := strings.TrimSpace(string(lineBytes))
+			if strings.HasPrefix(line, "data:") {
+				dataStr := strings.TrimSpace(line[5:])
+				if dataStr == "[DONE]" {
+					break
+				}
+				var chunk streamChunk
+				if err := json.Unmarshal([]byte(dataStr), &chunk); err == nil && len(chunk.Choices) > 0 {
+					delta := chunk.Choices[0].Delta
+
+					// Reasoning content handling (thinking models like DeepSeek R1/V4)
+					if delta.ReasoningContent != "" {
+						reasoningLineBuf.WriteString(delta.ReasoningContent)
+						for {
+							str := reasoningLineBuf.String()
+							nl := strings.IndexByte(str, '\n')
+							if nl == -1 {
+								break
+							}
+							completedLine := strings.TrimSpace(str[:nl])
+							reasoningLineBuf.Reset()
+							reasoningLineBuf.WriteString(str[nl+1:])
+
+							if m := lineRe.FindStringSubmatch(completedLine); len(m) == 3 {
+								if id, err := strconv.Atoi(m[1]); err == nil && id >= 1 && id <= len(texts) {
+									t := strings.ReplaceAll(m[2], `\n`, "\n")
+									if !strings.Contains(t, "likely typo") && !strings.Contains(t, "Hmm") {
+										reasoningMap[id] = t
+									}
+								}
+							}
+						}
+					}
+
+					// Content handling
+					if delta.Content != "" {
+						contentLineBuf.WriteString(delta.Content)
+						for {
+							str := contentLineBuf.String()
+							nl := strings.IndexByte(str, '\n')
+							if nl == -1 {
+								break
+							}
+							completedLine := strings.TrimSpace(str[:nl])
+							contentLineBuf.Reset()
+							contentLineBuf.WriteString(str[nl+1:])
+
+							if m := lineRe.FindStringSubmatch(completedLine); len(m) == 3 {
+								if id, err := strconv.Atoi(m[1]); err == nil && id >= 1 && id <= len(texts) {
+									t := strings.ReplaceAll(m[2], `\n`, "\n")
+									contentMap[id] = t
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		if err != nil {
+			// EOF or cutoff
+			break
+		}
+	}
+
+	// Flush remaining line in contentLineBuf
+	if remaining := strings.TrimSpace(contentLineBuf.String()); remaining != "" {
+		if m := lineRe.FindStringSubmatch(remaining); len(m) == 3 {
+			if id, err := strconv.Atoi(m[1]); err == nil && id >= 1 && id <= len(texts) {
+				contentMap[id] = strings.ReplaceAll(m[2], `\n`, "\n")
+			}
+		}
+	}
+
+	results := make([]translator.Result, len(texts))
+	for i, orig := range texts {
+		id := i + 1
+		var target string
+		if t, ok := contentMap[id]; ok && t != "" {
+			target = t
+		} else if t, ok := reasoningMap[id]; ok && t != "" {
+			target = t
+		}
+
+		if target != "" {
+			results[i] = translator.Result{
+				Source:     orig,
+				Target:     target,
+				Translator: "openai:" + modelName,
+			}
+		} else {
+			results[i] = translator.Result{
+				Source: orig,
+				Error:  fmt.Errorf("line %d not received from stream", id),
+			}
+		}
+	}
+
+	return results, nil
+}
+

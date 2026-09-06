@@ -89,9 +89,53 @@ func (s *Storage) migrate() error {
 		updated_at DATETIME
 	);
 	CREATE INDEX IF NOT EXISTS idx_tm_lang ON tm_cache(source_lang, target_lang);
+
+	CREATE TABLE IF NOT EXISTS metadata (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL
+	);
 	`
 	_, err := s.db.Exec(schema)
 	return err
+}
+
+// SetMetadata saves or updates a key-value pair in the metadata table
+func (s *Storage) SetMetadata(key, value string) error {
+	query := `INSERT INTO metadata (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;`
+	_, err := s.db.Exec(query, key, value)
+	return err
+}
+
+// GetMetadata retrieves a value by key from the metadata table
+func (s *Storage) GetMetadata(key string) (string, bool, error) {
+	var val string
+	err := s.db.QueryRow(`SELECT value FROM metadata WHERE key = ?;`, key).Scan(&val)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return val, true, nil
+}
+
+// GetAllMetadata retrieves all key-value pairs from the metadata table
+func (s *Storage) GetAllMetadata() (map[string]string, error) {
+	rows, err := s.db.Query(`SELECT key, value FROM metadata ORDER BY key ASC;`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make(map[string]string)
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			return nil, err
+		}
+		res[k] = v
+	}
+	return res, rows.Err()
 }
 
 func hashText(src, srcLang, tgtLang string) string {
@@ -175,6 +219,37 @@ func (s *Storage) SaveEntries(entries []model.TextEntry) error {
 	return tx.Commit()
 }
 
+// UpdateEntriesTargetBatch updates target, status, and translator for entries in a single transaction
+func (s *Storage) UpdateEntriesTargetBatch(entries []model.TextEntry) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`
+		UPDATE entries 
+		SET target = ?, status = ?, translator = ?, updated_at = ? 
+		WHERE id = ?
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	now := time.Now()
+	for _, e := range entries {
+		if e.Target != "" && e.Status != model.StatusUntranslated {
+			_, err := stmt.Exec(e.Target, string(e.Status), e.Translator, now, e.ID)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return tx.Commit()
+}
+
 // GetEntries returns all entries or filtered by status
 func (s *Storage) GetEntries(statusFilter string) ([]model.TextEntry, error) {
 	var query string
@@ -198,9 +273,13 @@ func (s *Storage) GetEntries(statusFilter string) ([]model.TextEntry, error) {
 	for rows.Next() {
 		var e model.TextEntry
 		var statusStr string
-		err := rows.Scan(&e.ID, &e.Source, &e.Target, &e.FilePath, &e.KeyPath, &statusStr, &e.Context, &e.Translator, &e.UpdatedAt)
+		var updatedAt sql.NullTime
+		err := rows.Scan(&e.ID, &e.Source, &e.Target, &e.FilePath, &e.KeyPath, &statusStr, &e.Context, &e.Translator, &updatedAt)
 		if err != nil {
 			return nil, err
+		}
+		if updatedAt.Valid {
+			e.UpdatedAt = updatedAt.Time
 		}
 		e.Status = model.TranslationStatus(statusStr)
 		entries = append(entries, e)
@@ -247,9 +326,13 @@ func (s *Storage) GetEntriesPaged(statusFilter string, limit, offset int) ([]mod
 	for rows.Next() {
 		var e model.TextEntry
 		var statusStr string
-		err := rows.Scan(&e.ID, &e.Source, &e.Target, &e.FilePath, &e.KeyPath, &statusStr, &e.Context, &e.Translator, &e.UpdatedAt)
+		var updatedAt sql.NullTime
+		err := rows.Scan(&e.ID, &e.Source, &e.Target, &e.FilePath, &e.KeyPath, &statusStr, &e.Context, &e.Translator, &updatedAt)
 		if err != nil {
 			return nil, err
+		}
+		if updatedAt.Valid {
+			e.UpdatedAt = updatedAt.Time
 		}
 		e.Status = model.TranslationStatus(statusStr)
 		entries = append(entries, e)
@@ -402,9 +485,13 @@ func (s *Storage) QueryEntries(q EntryQuery) ([]model.TextEntry, int, error) {
 	for rows.Next() {
 		var e model.TextEntry
 		var statusStr string
-		err := rows.Scan(&e.ID, &e.Source, &e.Target, &e.FilePath, &e.KeyPath, &statusStr, &e.Context, &e.Translator, &e.UpdatedAt)
+		var updatedAt sql.NullTime
+		err := rows.Scan(&e.ID, &e.Source, &e.Target, &e.FilePath, &e.KeyPath, &statusStr, &e.Context, &e.Translator, &updatedAt)
 		if err != nil {
 			return nil, 0, err
+		}
+		if updatedAt.Valid {
+			e.UpdatedAt = updatedAt.Time
 		}
 		e.Status = model.TranslationStatus(statusStr)
 		entries = append(entries, e)

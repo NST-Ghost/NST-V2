@@ -163,7 +163,7 @@ func (p *Pipeline) Run(ctx context.Context, entries []model.TextEntry, opts tran
 
 				// Unmask and update results
 				for idx, entryIdx := range batch {
-					if transResults[idx].Error != nil {
+					if idx >= len(transResults) || transResults[idx].Error != nil || transResults[idx].Target == "" {
 						mu.Lock()
 						entries[entryIdx].Status = model.StatusUntranslated
 						entries[entryIdx].UpdatedAt = time.Now()
