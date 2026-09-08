@@ -1,0 +1,7 @@
+# ==============================================================================
+# NST-V2 Translation Template: Standard Game Localization
+# ==============================================================================
+LOCALIZATION GUIDELINES:
+- Translate all game dialogue and UI strings accurately and naturally into the target language.
+- Preserve original emotional intent, comedic timing, and character voice.
+- Ensure natural phrasing suitable for video games, avoiding mechanical translation.

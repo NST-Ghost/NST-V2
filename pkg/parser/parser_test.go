@@ -9,12 +9,12 @@ import (
 func TestEngineAutoDetect(t *testing.T) {
 	// 1. Supported engines check
 	engines := SupportedEngines()
-	if len(engines) < 4 {
-		t.Fatalf("expected at least 4 engines, got %d", len(engines))
+	if len(engines) < 5 {
+		t.Fatalf("expected at least 5 engines, got %d", len(engines))
 	}
 
 	// 2. Test GetParser
-	for _, name := range []string{"rpgm", "rpgm-mv", "rpgm-mz", "renpy", "godot", "unity"} {
+	for _, name := range []string{"rpgm", "rpgm-mv", "rpgm-mz", "renpy", "godot", "unity", "libgdx"} {
 		p, err := GetParser(name)
 		if err != nil || p == nil {
 			t.Errorf("expected GetParser(%s) to succeed, got %v", name, err)

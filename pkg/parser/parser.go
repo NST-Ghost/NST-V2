@@ -7,6 +7,7 @@ import (
 
 	"nst-go/pkg/model"
 	"nst-go/pkg/parser/godot"
+	"nst-go/pkg/parser/libgdx"
 	"nst-go/pkg/parser/renpy"
 	"nst-go/pkg/parser/rpgm"
 	"nst-go/pkg/parser/unity"
@@ -34,6 +35,7 @@ func Registry() []EngineParser {
 		renpy.New(),
 		godot.New(),
 		unity.New(),
+		libgdx.New(),
 	}
 }
 

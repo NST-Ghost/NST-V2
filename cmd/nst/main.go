@@ -15,8 +15,10 @@ import (
 	"nst-go/pkg/app"
 	"nst-go/pkg/mcp"
 	"nst-go/pkg/model"
+	"nst-go/pkg/plugins/chanomhub"
 	"nst-go/pkg/registry"
 	"nst-go/pkg/storage"
+	"nst-go/pkg/translator/prompts"
 	"nst-go/pkg/webui"
 )
 
@@ -69,6 +71,8 @@ func main() {
 		handleImportPatch(os.Args[2:])
 	case "apply-patch":
 		handleApplyPatch(os.Args[2:])
+	case "styles", "templates":
+		handleStyles(os.Args[2:])
 	case "version", "-v", "--version":
 		fmt.Printf("NST CLI %s\n", version)
 	case "help", "-h", "--help":
@@ -96,6 +100,7 @@ Commands:
   merge        Merge existing translations into an updated game version
   projects     List registered projects and translation progress
   providers    List built-in and external custom translation providers
+  styles       List available translation styles and persona templates (standard, nsfw, etc.)
   status       Show translation statistics of a workspace
   publish      Compress and publish translation mod to Chanomhub
   meta         Manage workspace metadata (Chanomhub slug, game version, tags)
@@ -153,10 +158,12 @@ func handleTranslate(args []string) {
 	wsPath := fs.String("workspace", "workspace.nst", "Path to .nst workspace file")
 	providerName := fs.String("provider", "mock", "Provider: mock, gemini, openai, google, or custom (e.g. gpt)")
 	apiKey := fs.String("api-key", os.Getenv("NST_API_KEY"), "API Key (or env NST_API_KEY)")
-	modelName := fs.String("model", "", "Model name (e.g. gemini-2.5-flash, gpt-4o-mini)")
+	modelName := fs.String("model", "", "Model name (e.g. gemini-2.5-flash, gpt-4o-mini, deepseek-v4-pro-0813)")
 	baseURL := fs.String("base-url", "", "Custom Base URL for OpenAI/Ollama")
 	srcLang := fs.String("source", "Japanese", "Source language")
 	tgtLang := fs.String("target", "Thai", "Target language")
+	styleName := fs.String("style", "standard", "Translation style/persona: standard, nsfw, vn_romance, fantasy_rpg, comedy, dan_uncensored, or path to custom template file")
+	customPrompt := fs.String("prompt", "", "Custom system prompt instruction override")
 	batchSize := fs.Int("batch-size", 10, "Batch size")
 	concurrency := fs.Int("concurrency", 4, "Number of concurrent workers")
 	streamMode := fs.Bool("stream", false, "Use streaming line-by-line mode (SSE)")
@@ -193,6 +200,10 @@ func handleTranslate(args []string) {
 	fmt.Println("🚀 Starting Translation Pipeline...")
 	fmt.Printf("   Provider:    %s\n", strings.ToUpper(*providerName))
 	fmt.Printf("   Language:    %s -> %s\n", *srcLang, *tgtLang)
+	fmt.Printf("   Style:       %s\n", strings.ToUpper(*styleName))
+	if *customPrompt != "" {
+		fmt.Printf("   Prompt:      %s\n", *customPrompt)
+	}
 	fmt.Printf("   Batch Size:  %d\n", *batchSize)
 	fmt.Printf("   Concurrency: %d workers\n", *concurrency)
 	if *streamMode || *megaBatch {
@@ -213,6 +224,8 @@ func handleTranslate(args []string) {
 		},
 		SourceLang:  *srcLang,
 		TargetLang:  *tgtLang,
+		Style:       *styleName,
+		Prompt:      *customPrompt,
 		BatchSize:   *batchSize,
 		Concurrency: *concurrency,
 		Scope:       "all",
@@ -419,8 +432,8 @@ func handleProviders(args []string) {
 	}
 
 	fmt.Println("--------------------------------------------------------------------------------")
-	fmt.Println("💡 To add a new external provider without recompiling:")
-	fmt.Println("   Place a JSON config in ./providers/<name>.json or ~/.config/nst/providers/<name>.json")
+	fmt.Println("💡 To add a new external provider securely without git exposure:")
+	fmt.Println("   Place a JSON config in ~/.nst/providers/<name>.json (recommended) or ~/.config/nst/providers/")
 	fmt.Println("================================================================================")
 }
 
@@ -512,6 +525,12 @@ func handlePublish(args []string) {
 	}
 
 	fmt.Println("📦 Publishing translation mod to Chanomhub...")
+	if uInfo, err := chanomhub.ParseTokenUserInfo(*token); err == nil && uInfo != nil {
+		if uInfo.Username != "" {
+			fmt.Printf("   User:        %s (from Token)\n", uInfo.Username)
+		}
+	}
+
 	ctx := context.Background()
 	res, err := app.Publish(ctx, app.PublishOptions{
 		Workspace:  *wsPath,
@@ -801,6 +820,19 @@ func handleApplyPatch(args []string) {
 	fmt.Printf("✅ Patch applied directly to game successfully!\n")
 	fmt.Printf("   Target Directory: %s\n", dest)
 	fmt.Println("------------------------------------------")
+}
+
+func handleStyles(args []string) {
+	fmt.Println("🎨 Available Translation Styles & Persona Templates:")
+	fmt.Println("--------------------------------------------------------------------------------")
+	for _, s := range prompts.AvailableStyles() {
+		fmt.Printf("  • %-16s %s\n    %s\n\n", s.ID, s.Name, s.Description)
+	}
+	fmt.Println("--------------------------------------------------------------------------------")
+	fmt.Println("📁 Custom Template Files:")
+	fmt.Println("   Place custom templates in './templates/<name>.txt' or pass a path:")
+	fmt.Println("   Example: nst translate -workspace game.nst -provider maxplus -style nsfw")
+	fmt.Println("   Example: nst translate -workspace game.nst -provider maxplus -style ./templates/my_style.txt")
 }
 
 

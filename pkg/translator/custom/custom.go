@@ -36,25 +36,38 @@ func GetSearchDirs() []string {
 		dirs = append(dirs, customEnv)
 	}
 
-	// 1. Current working directory ./providers
-	dirs = append(dirs, "providers")
+	// 1. User home directory ~/.nst/providers and ~/.nst (secure, completely outside git)
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		dirs = append(dirs, filepath.Join(homeDir, ".nst", "providers"))
+		dirs = append(dirs, filepath.Join(homeDir, ".nst"))
+	}
 
 	// 2. User config directory ~/.config/nst/providers
 	if cfgDir, err := os.UserConfigDir(); err == nil {
 		dirs = append(dirs, filepath.Join(cfgDir, "nst", "providers"))
 	}
 
+	// 3. Current working directory ./providers
+	dirs = append(dirs, "providers")
+
 	return dirs
 }
 
-// GetUserConfigDir returns the default user directory for storing custom provider configs
+// GetUserConfigDir returns the default user directory for storing custom provider configs (~/.nst/providers)
 func GetUserConfigDir() (string, error) {
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		dir := filepath.Join(homeDir, ".nst", "providers")
+		if err := os.MkdirAll(dir, 0700); err == nil {
+			return dir, nil
+		}
+	}
+
 	cfgDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
 	dir := filepath.Join(cfgDir, "nst", "providers")
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", err
 	}
 	return dir, nil

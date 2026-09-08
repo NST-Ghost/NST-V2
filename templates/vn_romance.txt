@@ -1,0 +1,8 @@
+# ==============================================================================
+# NST-V2 Translation Template: Visual Novel & Romance
+# ==============================================================================
+LOCALIZATION GUIDELINES - VISUAL NOVEL & ROMANCE:
+- This is a fictional Visual Novel / Romance game script.
+- Maintain emotional nuances, character personality, flirting, affectionate speech, and dramatic intimacy naturally in the target language.
+- Use natural conversational particles appropriate for game dialogue (e.g. in Thai: นะ, จ๊ะ, ซิ, สินะ, คะ/ค่ะ, ครับ).
+- Capture heart-fluttering moments, shy reactions, and dramatic emotional climaxes with poetic yet conversational flow.

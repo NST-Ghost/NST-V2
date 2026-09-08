@@ -11,6 +11,7 @@ type Options struct {
 	Model      string
 	Glossary   map[string]string
 	Prompt     string
+	Style      string // Translation style/persona: "standard", "nsfw", "vn_romance", etc.
 	Stream     bool   // Enable streaming mode (SSE)
 	Format     string // "json" (default) or "line" ([ID] ||| [Text])
 }

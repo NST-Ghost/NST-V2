@@ -208,7 +208,7 @@ func (s *Server) ListTools() []map[string]interface{} {
 					},
 					"engine": map[string]interface{}{
 						"type":        "string",
-						"description": "Optional engine override (rpgm, renpy, godot, unity)",
+						"description": "Optional engine override (rpgm, renpy, godot, unity, libgdx)",
 					},
 				},
 				"required": []string{"path"},

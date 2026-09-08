@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"nst-go/pkg/translator"
+	"nst-go/pkg/translator/prompts"
 )
 
 type Config struct {
@@ -104,14 +105,8 @@ func (c *Client) Translate(ctx context.Context, texts []string, opts translator.
 		return c.translateStream(ctx, texts, opts)
 	}
 
-	systemPrompt := fmt.Sprintf(
-		"You are a professional video game localizer translating from %s to %s.\n"+
-			"Strict rules:\n"+
-			"1. Translate each numbered line accurately, keeping natural dialogue flow and character tones.\n"+
-			"2. Preserve all special tokens and tags like __NST_TAG_0__, __NST_TAG_1__ EXACTLY as they are without modifying or dropping them.\n"+
-			"3. Output ONLY a valid JSON array of strings corresponding 1-to-1 with the input lines, e.g. [\"line 1\", \"line 2\"]. No markdown, no explanations.",
-		opts.SourceLang, opts.TargetLang,
-	)
+	systemPrompt := prompts.ResolvePrompt(opts.Style, opts.SourceLang, opts.TargetLang, opts.Prompt)
+	systemPrompt += "\n\nCRITICAL FORMAT RULE:\nOutput ONLY a valid JSON array of strings corresponding 1-to-1 with the input lines, e.g. [\"line 1\", \"line 2\"]. No markdown, no explanations."
 
 	inputJSON, err := json.Marshal(texts)
 	if err != nil {
@@ -213,15 +208,8 @@ func (c *Client) translateStream(ctx context.Context, texts []string, opts trans
 		modelName = opts.Model
 	}
 
-	systemPrompt := fmt.Sprintf(
-		"You are an expert master game localizer translating from %s to %s.\n\n"+
-			"STRICT RULES:\n"+
-			"1. Output format MUST be EXACTLY line-by-line: [ID] ||| [Translation]\n"+
-			"2. Do NOT output markdown code blocks (NO ```), explanations, or notes. Output ONLY the numbered lines.\n"+
-			"3. Preserve all special tokens and tags like __NST_TAG_0__, __NST_TAG_1__ EXACTLY as they are without modifying or dropping them.\n"+
-			"4. Translate every single numbered item sequentially without skipping.",
-		opts.SourceLang, opts.TargetLang,
-	)
+	systemPrompt := prompts.ResolvePrompt(opts.Style, opts.SourceLang, opts.TargetLang, opts.Prompt)
+	systemPrompt += "\n\nCRITICAL FORMAT RULE:\n1. Output format MUST be EXACTLY line-by-line: [ID] ||| [Translation]\n2. Do NOT output markdown code blocks (NO ```), explanations, or notes. Output ONLY the numbered lines.\n3. Preserve all special tokens and tags like __NST_TAG_0__, __NST_TAG_1__ EXACTLY as they are without modifying or dropping them.\n4. Translate every single numbered item sequentially without skipping."
 
 	var sb strings.Builder
 	sb.WriteString("Translate each of the following lines sequentially. Output ONLY '[ID] ||| [Translation]':\n\n")

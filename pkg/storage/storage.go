@@ -537,3 +537,29 @@ func (s *Storage) SetCache(source, target, srcLang, tgtLang, service string) err
 	_, err := s.db.Exec(query, h, source, target, srcLang, tgtLang, service, time.Now())
 	return err
 }
+
+// GetPrimaryTranslator queries the most used AI model/service for translated entries
+func (s *Storage) GetPrimaryTranslator() (string, error) {
+	row := s.db.QueryRow(`
+		SELECT translator, COUNT(*) as cnt 
+		FROM entries 
+		WHERE status != 'untranslated' AND translator != '' AND translator != 'manual' AND translator != 'tm_cache'
+		GROUP BY translator 
+		ORDER BY cnt DESC 
+		LIMIT 1
+	`)
+	var trans string
+	var cnt int
+	if err := row.Scan(&trans, &cnt); err == nil && trans != "" {
+		return trans, nil
+	}
+
+	// Fallback to any non-empty translator
+	row2 := s.db.QueryRow(`SELECT translator FROM entries WHERE translator != '' LIMIT 1`)
+	if err2 := row2.Scan(&trans); err2 == nil {
+		return trans, nil
+	}
+
+	return "", nil
+}
+

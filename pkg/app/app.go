@@ -45,6 +45,8 @@ type TranslateOptions struct {
 	Scope       string         `json:"scope"` // "all", "untranslated", or file path
 	Stream      bool           `json:"stream,omitempty"`
 	Format      string         `json:"format,omitempty"` // "json" (default) or "line"
+	Style       string         `json:"style,omitempty"`  // e.g. "standard", "nsfw", "vn_romance", "fantasy_rpg", etc.
+	Prompt      string         `json:"prompt,omitempty"` // Custom system prompt instruction
 }
 
 // PublishOptions configures translation mod publishing to Chanomhub
@@ -180,6 +182,17 @@ func (w *Workspace) Store() *storage.Storage {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	return w.store
+}
+
+// GetPrimaryTranslator returns the primary model/translator used in the workspace
+func (w *Workspace) GetPrimaryTranslator() string {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	if w.store == nil {
+		return ""
+	}
+	t, _ := w.store.GetPrimaryTranslator()
+	return t
 }
 
 // Project returns a copy of current project metadata
@@ -320,6 +333,8 @@ func (w *Workspace) Translate(ctx context.Context, opts TranslateOptions, progre
 		Model:      opts.Provider.Model,
 		Stream:     opts.Stream,
 		Format:     opts.Format,
+		Style:      opts.Style,
+		Prompt:     opts.Prompt,
 	}
 
 	_, err = pipe.Run(ctx, entries, tOpts, progressCb)
@@ -551,7 +566,10 @@ func Publish(ctx context.Context, opts PublishOptions) (*chanomhub.PublishResult
 	lang := opts.Language
 	credit := opts.CreditTo
 	gameVersion := "1.0.0"
+	sourceLang := ""
+	translatorModel := ""
 	var configData map[string]interface{}
+	var statsData map[string]interface{}
 
 	if opts.Workspace != "" {
 		ws, err := Open(opts.Workspace)
@@ -571,6 +589,10 @@ func Publish(ctx context.Context, opts PublishOptions) (*chanomhub.PublishResult
 				lang = ws.project.TargetLang
 			}
 		}
+		if ws.project != nil {
+			sourceLang = ws.project.SourceLang
+		}
+		translatorModel = ws.GetPrimaryTranslator()
 		if gv, ok := meta["game_version"]; ok && gv != "" {
 			gameVersion = gv
 		}
@@ -586,6 +608,17 @@ func Publish(ctx context.Context, opts PublishOptions) (*chanomhub.PublishResult
 		}
 		patchFileToUpload = tempPatch
 		tempPatchToDelete = tempPatch
+
+		pct := 0.0
+		if pkg.Stats.TotalEntries > 0 {
+			pct = (float64(pkg.Stats.TranslatedEntries) / float64(pkg.Stats.TotalEntries)) * 100.0
+		}
+		statsData = map[string]interface{}{
+			"total_entries":      pkg.Stats.TotalEntries,
+			"translated_entries": pkg.Stats.TranslatedEntries,
+			"unique_texts":       pkg.Stats.UniqueTexts,
+			"progress_percent":   pct,
+		}
 
 		configData = map[string]interface{}{
 			"format":             "patch.json.gz",
@@ -604,11 +637,25 @@ func Publish(ctx context.Context, opts PublishOptions) (*chanomhub.PublishResult
 			if lang == "" {
 				lang = pkg.TargetLang
 			}
+			sourceLang = pkg.SourceLang
+			if tm, ok := pkg.Metadata["translator_model"]; ok {
+				translatorModel = tm
+			}
 			if pkg.Engine != "" {
 				engine = pkg.Engine
 			}
 			if pkg.GameVersion != "" {
 				gameVersion = pkg.GameVersion
+			}
+			pct := 0.0
+			if pkg.Stats.TotalEntries > 0 {
+				pct = (float64(pkg.Stats.TranslatedEntries) / float64(pkg.Stats.TotalEntries)) * 100.0
+			}
+			statsData = map[string]interface{}{
+				"total_entries":      pkg.Stats.TotalEntries,
+				"translated_entries": pkg.Stats.TranslatedEntries,
+				"unique_texts":       pkg.Stats.UniqueTexts,
+				"progress_percent":   pct,
 			}
 			configData = map[string]interface{}{
 				"format":             "patch.json.gz",
@@ -631,16 +678,37 @@ func Publish(ctx context.Context, opts PublishOptions) (*chanomhub.PublishResult
 		return nil, fmt.Errorf("either -workspace, -patch, or -path (game directory) is required to publish")
 	}
 
+	// Customizable credit: public pen name / alias.
+	// Defaults to "NST Translator". Sensitive account information is never sent;
+	// the server verifies user identity safely via the Bearer token.
+	if credit == "" || credit == "NST" {
+		credit = "NST Translator"
+	}
+
+	if configData == nil {
+		configData = make(map[string]interface{})
+	}
+	configData["credit_to"] = credit
+	configData["translator_tool"] = "NST-V2"
+	configData["ai_model"] = translatorModel
+	configData["source_language"] = sourceLang
+	configData["target_language"] = lang
+	configData["translation_summary"] = fmt.Sprintf("แปลโดย: %s | โมเดล: %s | ภาษา: %s -> %s", credit, translatorModel, sourceLang, lang)
+
 	client := chanomhub.NewClient(opts.APIBase, opts.StorageURL, opts.Token)
 	return client.PublishTranslation(ctx, chanomhub.PublishRequest{
-		PatchFile:   patchFileToUpload,
-		GameDir:     opts.GameDir,
-		Slug:        slug,
-		Language:    lang,
-		Engine:      engine,
-		CreditTo:    credit,
-		GameVersion: gameVersion,
-		Config:      configData,
+		PatchFile:       patchFileToUpload,
+		GameDir:         opts.GameDir,
+		Slug:            slug,
+		Language:        lang,
+		Engine:          engine,
+		CreditTo:        credit,
+		GameVersion:     gameVersion,
+		TranslatorModel: translatorModel,
+		SourceLanguage:  sourceLang,
+		TargetLanguage:  lang,
+		Stats:           statsData,
+		Config:          configData,
 	})
 }
 

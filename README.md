@@ -15,6 +15,7 @@
   - **Ren'Py:** `.rpy` scripts, dialogue strings, menu items, and native `tl/Thai/` export.
   - **Godot:** `.tscn` scene files, GDScript `tr()` calls, and `.csv` translation catalogs.
   - **Unity:** YAML scene `.asset` / `.prefab`, StreamingAssets JSON/CSV, and XUnity.AutoTranslator export.
+  - **libGDX:** Java `.properties` bundles, narrative script JSONs (e.g. *Tales of Androgyny* encounters/trees), non-destructive `translations/` modding export, and standalone JAR patching.
 - **Non-Destructive In-Game Injection:** Deploy translations into RPG Maker games via `NST_TranslationLayer.js` without touching original game data files.
 - **Tag Masking & Protection:** Intelligent masking ensures engine escape codes (such as `\c[1]`, `\v[n]`, `\fs[20]`) remain intact across translation providers with fuzzy restoration.
 - **Translation Memory (TM Cache):** Embedded SQLite workspace (`.nst`) prevents duplicate API calls and maintains translation consistency across project revisions.

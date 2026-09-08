@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"nst-go/pkg/translator"
+	"nst-go/pkg/translator/prompts"
 )
 
 type Config struct {
@@ -79,14 +80,8 @@ func (c *Client) Translate(ctx context.Context, texts []string, opts translator.
 		return nil, nil
 	}
 
-	systemInstruction := fmt.Sprintf(
-		"You are an elite video game localization translator translating from %s to %s.\n"+
-			"Rules:\n"+
-			"1. Translate each line accurately, preserving context and character tone.\n"+
-			"2. Retain all special game placeholders like __NST_TAG_0__, __NST_TAG_1__ exactly.\n"+
-			"3. Return a JSON array of strings corresponding 1-to-1 with input lines. No commentary.",
-		opts.SourceLang, opts.TargetLang,
-	)
+	systemInstruction := prompts.ResolvePrompt(opts.Style, opts.SourceLang, opts.TargetLang, opts.Prompt)
+	systemInstruction += "\n\nCRITICAL FORMAT RULE:\nReturn a valid JSON array of strings corresponding 1-to-1 with input lines. No commentary."
 
 	inputJSON, err := json.Marshal(texts)
 	if err != nil {

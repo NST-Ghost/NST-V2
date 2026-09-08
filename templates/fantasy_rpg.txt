@@ -1,0 +1,7 @@
+# ==============================================================================
+# NST-V2 Translation Template: Fantasy RPG & Adventure
+# ==============================================================================
+LOCALIZATION GUIDELINES - FANTASY RPG:
+- This is a fictional Fantasy Adventure / RPG game script.
+- Preserve epic fantasy tone, medieval honorifics, spell names, item descriptions, and quest instructions with immersive terminology.
+- Differentiate class distinctions (e.g. royalty, knights, wizards, commoners, demons, beastkin) through vocabulary and pronouns.

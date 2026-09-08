@@ -86,10 +86,14 @@ func TestChanomhubZipAndPublish(t *testing.T) {
 				http.Error(w, "Bad creditTo", http.StatusBadRequest)
 				return
 			}
+			if sha, ok := body["sha256"].(string); !ok || sha == "" {
+				http.Error(w, "Missing sha256", http.StatusBadRequest)
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"status": "pending",
-				"id":     "mod_abc123",
+				"id":     123,
 			})
 			return
 		}
@@ -112,6 +116,12 @@ func TestChanomhubZipAndPublish(t *testing.T) {
 
 	if !res.Success {
 		t.Errorf("expected res.Success to be true")
+	}
+	if res.SHA256 == "" {
+		t.Errorf("expected res.SHA256 to not be empty")
+	}
+	if res.ModID != 123 {
+		t.Errorf("expected res.ModID to be 123, got %d", res.ModID)
 	}
 	if !uploadHit {
 		t.Errorf("expected upload endpoint to be hit")

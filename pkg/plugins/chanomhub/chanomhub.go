@@ -4,6 +4,9 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -37,6 +40,66 @@ type Config struct {
 	LastSlug        string `json:"last_slug"`
 }
 
+// TokenUserInfo holds user identity parsed from the Chanomhub JWT token
+type TokenUserInfo struct {
+	UserID   string `json:"user_id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+}
+
+// ParseTokenUserInfo decodes the payload of a Chanomhub JWT token without verifying secret signature
+func ParseTokenUserInfo(token string) (*TokenUserInfo, error) {
+	clean := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(token), "Bearer "))
+	parts := strings.Split(clean, ".")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid jwt token format")
+	}
+
+	segment := parts[1]
+	if rem := len(segment) % 4; rem != 0 {
+		segment += strings.Repeat("=", 4-rem)
+	}
+
+	decoded, err := base64.URLEncoding.DecodeString(segment)
+	if err != nil {
+		decoded, err = base64.RawURLEncoding.DecodeString(parts[1])
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode jwt payload: %w", err)
+		}
+	}
+
+	var claims map[string]interface{}
+	if err := json.Unmarshal(decoded, &claims); err != nil {
+		return nil, fmt.Errorf("failed to parse jwt json: %w", err)
+	}
+
+	info := &TokenUserInfo{}
+	for _, k := range []string{"username", "user_name", "name", "displayName", "login", "user"} {
+		if v, ok := claims[k].(string); ok && v != "" {
+			info.Username = v
+			break
+		}
+	}
+	for _, k := range []string{"sub", "id", "user_id", "userId"} {
+		if v, ok := claims[k].(string); ok && v != "" {
+			info.UserID = v
+			break
+		}
+	}
+	if v, ok := claims["email"].(string); ok {
+		info.Email = v
+	}
+
+	if info.Username == "" && info.Email != "" {
+		info.Username = strings.Split(info.Email, "@")[0]
+	}
+	if info.Username == "" && info.UserID != "" {
+		info.Username = "User_" + info.UserID
+	}
+
+	return info, nil
+}
+
 // NewClient creates a new Chanomhub client
 func NewClient(apiBase, storageURL, token string) *Client {
 	if apiBase == "" {
@@ -57,23 +120,31 @@ func NewClient(apiBase, storageURL, token string) *Client {
 
 // PublishRequest holds parameters for publishing a translation mod
 type PublishRequest struct {
-	Workspace   string                 `json:"workspace,omitempty"`
-	PatchFile   string                 `json:"patch_file,omitempty"`
-	GameDir     string                 `json:"game_dir,omitempty"`
-	Slug        string                 `json:"slug"`
-	Language    string                 `json:"language"`
-	Engine      string                 `json:"engine"`
-	CreditTo    string                 `json:"credit_to"`
-	GameVersion string                 `json:"game_version,omitempty"`
-	Config      map[string]interface{} `json:"config,omitempty"`
+	Workspace       string                 `json:"workspace,omitempty"`
+	PatchFile       string                 `json:"patch_file,omitempty"`
+	GameDir         string                 `json:"game_dir,omitempty"`
+	Slug            string                 `json:"slug"`
+	Language        string                 `json:"language"`
+	Engine          string                 `json:"engine"`
+	CreditTo        string                 `json:"credit_to"`
+	GameVersion     string                 `json:"game_version,omitempty"`
+	TranslatorModel string                 `json:"translator_model,omitempty"`
+	SourceLanguage  string                 `json:"source_language,omitempty"`
+	TargetLanguage  string                 `json:"target_language,omitempty"`
+	SHA256          string                 `json:"sha256,omitempty"`
+	Stats           map[string]interface{} `json:"stats,omitempty"`
+	Config          map[string]interface{} `json:"config,omitempty"`
 }
 
 // PublishResult contains response details from Chanomhub
 type PublishResult struct {
-	Success      bool   `json:"success"`
-	DownloadURL  string `json:"download_url"`
+	Success       bool   `json:"success"`
+	ModID         int    `json:"mod_id,omitempty"`
+	Status        string `json:"status,omitempty"`
+	DownloadURL   string `json:"download_url"`
+	SHA256        string `json:"sha256,omitempty"`
 	FileSizeBytes int64  `json:"file_size_bytes"`
-	Message      string `json:"message"`
+	Message       string `json:"message"`
 }
 
 // ZipDirectory compresses a directory into a zip archive
@@ -212,6 +283,10 @@ func (c *Client) PublishTranslation(ctx context.Context, req PublishRequest) (*P
 		return nil, fmt.Errorf("failed to read upload file: %w", err)
 	}
 
+	h := sha256.New()
+	h.Write(fileBytes)
+	fileSHA256 := hex.EncodeToString(h.Sum(nil))
+
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	part, err := writer.CreateFormFile("file", uploadFileName)
@@ -268,12 +343,18 @@ func (c *Client) PublishTranslation(ctx context.Context, req PublishRequest) (*P
 
 	// 4. Register as pending TRANSLATION mod
 	submitPayload := map[string]interface{}{
-		"downloadLink":  downloadURL,
-		"language":      req.Language,
-		"engine":        req.Engine,
-		"creditTo":      req.CreditTo,
-		"fileSizeBytes": fileSize,
-		"config":        req.Config,
+		"downloadLink":     downloadURL,
+		"sha256":           fileSHA256,
+		"language":         req.Language,
+		"engine":           req.Engine,
+		"creditTo":         req.CreditTo,
+		"fileSizeBytes":    fileSize,
+		"gameVersion":      req.GameVersion,
+		"translatorModel":  req.TranslatorModel,
+		"sourceLanguage":   req.SourceLanguage,
+		"targetLanguage":   req.TargetLanguage,
+		"stats":            req.Stats,
+		"config":           req.Config,
 	}
 	payloadBytes, _ := json.Marshal(submitPayload)
 
@@ -300,10 +381,34 @@ func (c *Client) PublishTranslation(ctx context.Context, req PublishRequest) (*P
 		return nil, fmt.Errorf("submission failed (HTTP %d): %s", submitResp.StatusCode, string(submitRespBody))
 	}
 
+	var submitJSON map[string]interface{}
+	modID := 0
+	modStatus := "PENDING"
+	if err := json.Unmarshal(submitRespBody, &submitJSON); err == nil {
+		if modObj, ok := submitJSON["mod"].(map[string]interface{}); ok {
+			if id, ok := modObj["id"].(float64); ok {
+				modID = int(id)
+			}
+			if st, ok := modObj["status"].(string); ok {
+				modStatus = st
+			}
+		} else if id, ok := submitJSON["id"].(float64); ok {
+			modID = int(id)
+		}
+	}
+
+	msg := "Submitted successfully! Translation is pending moderation on Chanomhub."
+	if modID > 0 {
+		msg = fmt.Sprintf("Submitted successfully (Mod ID: %d, Status: %s)! Translation is pending moderation on Chanomhub.", modID, modStatus)
+	}
+
 	return &PublishResult{
 		Success:       true,
+		ModID:         modID,
+		Status:        modStatus,
 		DownloadURL:   downloadURL,
+		SHA256:        fileSHA256,
 		FileSizeBytes: fileSize,
-		Message:       "Submitted successfully! Translation is pending moderation on Chanomhub.",
+		Message:       msg,
 	}, nil
 }
