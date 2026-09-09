@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"flag"
@@ -61,6 +62,12 @@ func main() {
 		handleMCP(os.Args[2:])
 	case "publish":
 		handlePublish(os.Args[2:])
+	case "login", "adduser":
+		handleLogin(os.Args[2:])
+	case "logout":
+		handleLogout(os.Args[2:])
+	case "whoami":
+		handleWhoami(os.Args[2:])
 	case "import-cache":
 		handleImportCache(os.Args[2:])
 	case "meta":
@@ -103,6 +110,9 @@ Commands:
   styles       List available translation styles and persona templates (standard, nsfw, etc.)
   status       Show translation statistics of a workspace
   publish      Compress and publish translation mod to Chanomhub
+  login        Authenticate with Chanomhub registry (npm login style)
+  logout       Log out from Chanomhub and clear saved credentials
+  whoami       Display currently logged-in Chanomhub user
   meta         Manage workspace metadata (Chanomhub slug, game version, tags)
   export-patch Export translated workspace to ultra-compact distribution patch (.patch.json.gz)
   import-patch Re-hydrate/merge distribution patch into workspace and TM cache (0 API cost)
@@ -113,11 +123,13 @@ Commands:
 Examples:
   nst ui
   nst providers
+  nst login
+  nst whoami
   nst extract -path ./MyGame -workspace ./project.nst
   nst translate -workspace ./project.nst -provider gpt -source Japanese -target Thai
   nst inject -path ./MyGame -workspace ./project.nst -dest ./MyGame_Translated
   nst deploy -path ./MyGame -workspace ./project.nst
-  nst publish -path ./MyGame -slug my-game-slug -token <YOUR_JWT>
+  nst publish -path ./MyGame -slug my-game-slug
   nst mcp`)
 }
 
@@ -506,11 +518,11 @@ func handlePublish(args []string) {
 	patchPath := fs.String("patch", "", "Path to .patch.json.gz distribution package")
 	gamePath := fs.String("path", "", "Legacy path to game folder containing nst_translations/")
 	slug := fs.String("slug", "", "Chanomhub game article slug (optional if stored in workspace)")
-	token := fs.String("token", os.Getenv("CHANOMHUB_TOKEN"), "Chanomhub API token (or CHANOMHUB_TOKEN env)")
+	token := fs.String("token", "", "Chanomhub API token (defaults to CHANOMHUB_TOKEN or saved login)")
 	lang := fs.String("lang", "", "Target language name")
 	credit := fs.String("credit", "NST", "Credit to translator/group")
-	apiBase := fs.String("api-base", "", "Custom API base URL")
-	storageURL := fs.String("storage-url", "", "Custom storage URL")
+	apiBase := fs.String("api-base", "", "Custom API base URL (defaults to saved registry)")
+	storageURL := fs.String("storage-url", "", "Custom storage URL (defaults to saved storage URL)")
 	fs.Parse(args)
 
 	if *wsPath == "" && *patchPath == "" && *gamePath == "" {
@@ -518,14 +530,29 @@ func handlePublish(args []string) {
 		fs.Usage()
 		os.Exit(1)
 	}
-	if *token == "" {
-		fmt.Println("Error: -token (or CHANOMHUB_TOKEN env variable) is required")
-		fs.Usage()
+
+	effectiveToken := strings.TrimSpace(*token)
+	if effectiveToken == "" {
+		effectiveToken = chanomhub.GetEffectiveToken()
+	}
+	if effectiveToken == "" {
+		fmt.Println("Error: Authentication required to publish translation mods.")
+		fmt.Println("Please run 'nst login' to authenticate, or provide -token / CHANOMHUB_TOKEN.")
 		os.Exit(1)
 	}
 
-	fmt.Println("📦 Publishing translation mod to Chanomhub...")
-	if uInfo, err := chanomhub.ParseTokenUserInfo(*token); err == nil && uInfo != nil {
+	effectiveAPIBase := *apiBase
+	if effectiveAPIBase == "" {
+		effectiveAPIBase = chanomhub.GetEffectiveAPIBase()
+	}
+
+	effectiveStorageURL := *storageURL
+	if effectiveStorageURL == "" {
+		effectiveStorageURL = chanomhub.GetEffectiveStorageURL()
+	}
+
+	fmt.Printf("📦 Publishing translation mod to Chanomhub (%s)...\n", effectiveAPIBase)
+	if uInfo, err := chanomhub.ParseTokenUserInfo(effectiveToken); err == nil && uInfo != nil {
 		if uInfo.Username != "" {
 			fmt.Printf("   User:        %s (from Token)\n", uInfo.Username)
 		}
@@ -537,11 +564,11 @@ func handlePublish(args []string) {
 		PatchFile:  *patchPath,
 		GameDir:    *gamePath,
 		Slug:       *slug,
-		Token:      *token,
+		Token:      effectiveToken,
 		Language:   *lang,
 		CreditTo:   *credit,
-		APIBase:    *apiBase,
-		StorageURL: *storageURL,
+		APIBase:    effectiveAPIBase,
+		StorageURL: effectiveStorageURL,
 	})
 	if err != nil {
 		fmt.Printf("Publish failed: %v\n", err)
@@ -551,6 +578,156 @@ func handlePublish(args []string) {
 	fmt.Printf("✅ %s\n", res.Message)
 	fmt.Printf("   Download URL: %s\n", res.DownloadURL)
 	fmt.Printf("   Archive Size: %d bytes (%.2f KB)\n", res.FileSizeBytes, float64(res.FileSizeBytes)/1024.0)
+}
+
+func handleLogin(args []string) {
+	fs := flag.NewFlagSet("login", flag.ExitOnError)
+	webURL := fs.String("web-url", "", "Chanomhub web portal URL (defaults to CHANOMHUB_WEB_URL or https://chanomhub.com)")
+	apiBase := fs.String("registry", "", "Chanomhub registry / API base URL")
+	fs.StringVar(apiBase, "api-base", "", "Chanomhub registry / API base URL (alias)")
+	storageURL := fs.String("storage-url", "", "Custom storage URL")
+	token := fs.String("token", "", "Direct token authentication (bypasses browser login)")
+	fs.StringVar(token, "t", "", "Direct token authentication (shorthand)")
+	username := fs.String("username", "", "Username or email (classic credentials login)")
+	fs.StringVar(username, "u", "", "Username or email (shorthand)")
+	password := fs.String("password", "", "Password (classic credentials login)")
+	fs.StringVar(password, "p", "", "Password (shorthand)")
+	port := fs.Int("port", 0, "Custom local callback port (defaults to 0 for random free port)")
+	fs.Parse(args)
+
+	targetRegistry := *apiBase
+	if targetRegistry == "" {
+		targetRegistry = chanomhub.GetEffectiveAPIBase()
+	}
+
+	targetWeb := *webURL
+	if targetWeb == "" {
+		targetWeb = chanomhub.GetEffectiveWebURL()
+	}
+
+	// 1. Direct token login
+	if *token != "" {
+		fmt.Printf("🔐 Chanomhub Login (%s)\n\n", targetRegistry)
+		ctx := context.Background()
+		res, err := chanomhub.Login(ctx, chanomhub.LoginRequest{
+			Token:      *token,
+			APIBase:    *apiBase,
+			StorageURL: *storageURL,
+		})
+		if err != nil {
+			fmt.Printf("❌ Login failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("✅ Logged in as %s to %s\n", res.UserInfo.Username, res.APIBase)
+		return
+	}
+
+	// 2. Direct username & password login if provided via flags
+	if *username != "" && *password != "" {
+		fmt.Printf("🔐 Chanomhub Login (%s)\n\n", targetRegistry)
+		ctx := context.Background()
+		res, err := chanomhub.Login(ctx, chanomhub.LoginRequest{
+			UsernameOrEmail: *username,
+			Password:        *password,
+			APIBase:         *apiBase,
+			StorageURL:      *storageURL,
+		})
+		if err != nil {
+			fmt.Printf("❌ Login failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("✅ Logged in as %s to %s\n", res.UserInfo.Username, res.APIBase)
+		return
+	}
+
+	// 3. Web-based browser login flow (Universal OAuth/PKCE-style)
+	stateNonce := chanomhub.GenerateSecureState()
+
+	actualPort, tokenChan, cleanup, err := chanomhub.StartLocalCallbackServer(*port, stateNonce)
+	if err != nil {
+		fmt.Printf("Error starting local callback server: %v\n", err)
+		os.Exit(1)
+	}
+	defer cleanup()
+
+	callbackURI := fmt.Sprintf("http://127.0.0.1:%d/callback", actualPort)
+	authURL := chanomhub.BuildAuthorizationURL(
+		targetWeb,
+		"nst-cli",
+		"NST (Novelty Translation Tool)",
+		callbackURI,
+		stateNonce,
+	)
+
+	fmt.Println("🔐 Chanomhub Login")
+	fmt.Println()
+	fmt.Printf("Authenticate your account at:\n👉 %s\n\n", authURL)
+	fmt.Println("Opening browser automatically... (or copy and paste the link above)")
+	_ = chanomhub.OpenBrowser(authURL)
+
+	fmt.Println()
+	fmt.Println("Waiting for web authentication... (or paste token below)")
+	fmt.Print("Token: ")
+
+	stdinChan := make(chan string, 1)
+	go func() {
+		reader := bufio.NewReader(os.Stdin)
+		line, err := reader.ReadString('\n')
+		if err == nil {
+			t := strings.TrimSpace(line)
+			if t != "" {
+				stdinChan <- t
+			}
+		}
+	}()
+
+	var finalToken string
+	select {
+	case tok := <-tokenChan:
+		fmt.Println("\n\nReceived authorization from browser! 🚀")
+		finalToken = tok
+	case tok := <-stdinChan:
+		finalToken = tok
+	case <-time.After(5 * time.Minute):
+		fmt.Println("\n❌ Login timed out waiting for authorization.")
+		os.Exit(1)
+	}
+
+	ctx := context.Background()
+	res, err := chanomhub.Login(ctx, chanomhub.LoginRequest{
+		Token:      finalToken,
+		APIBase:    targetRegistry,
+		StorageURL: *storageURL,
+	})
+	if err != nil {
+		fmt.Printf("❌ Login verification failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("✅ Logged in as %s to %s\n", res.UserInfo.Username, res.APIBase)
+}
+
+func handleLogout(args []string) {
+	if err := chanomhub.ClearConfig(); err != nil {
+		fmt.Printf("Failed to clear credentials: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("👋 Successfully logged out from Chanomhub.")
+}
+
+func handleWhoami(args []string) {
+	ctx := context.Background()
+	info, apiBase, err := chanomhub.Whoami(ctx)
+	if err != nil {
+		fmt.Printf("Not logged in to Chanomhub. Run 'nst login' to authenticate.\n")
+		os.Exit(1)
+	}
+
+	if info.Email != "" && info.Email != info.Username {
+		fmt.Printf("Logged in as %s (%s) on %s\n", info.Username, info.Email, apiBase)
+	} else {
+		fmt.Printf("Logged in as %s on %s\n", info.Username, apiBase)
+	}
 }
 
 func handleImportCache(args []string) {

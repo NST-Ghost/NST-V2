@@ -44,3 +44,7 @@ Thumbs.db
 # External translation provider configs (ignore user keys/endpoints)
 providers/*.json
 !providers/*.template
+
+# Research and local datasets
+research/
+

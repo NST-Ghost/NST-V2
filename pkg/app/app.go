@@ -556,7 +556,16 @@ func CreateTranslator(cfg ProviderConfig) (translator.Translator, error) {
 // Publish uploads a translation mod to Chanomhub
 func Publish(ctx context.Context, opts PublishOptions) (*chanomhub.PublishResult, error) {
 	if opts.Token == "" {
-		return nil, fmt.Errorf("token is required to publish")
+		opts.Token = chanomhub.GetEffectiveToken()
+	}
+	if opts.Token == "" {
+		return nil, fmt.Errorf("token is required to publish (run 'nst login' to authenticate)")
+	}
+	if opts.APIBase == "" {
+		opts.APIBase = chanomhub.GetEffectiveAPIBase()
+	}
+	if opts.StorageURL == "" {
+		opts.StorageURL = chanomhub.GetEffectiveStorageURL()
 	}
 
 	var patchFileToUpload string

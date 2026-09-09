@@ -36,8 +36,12 @@ type Config struct {
 	APIBase         string `json:"api_base"`
 	StorageURL      string `json:"storage_url"`
 	Token           string `json:"token"`
-	DefaultLanguage string `json:"default_language"`
-	LastSlug        string `json:"last_slug"`
+	RefreshToken    string `json:"refresh_token,omitempty"`
+	Username        string `json:"username,omitempty"`
+	Email           string `json:"email,omitempty"`
+	UserID          string `json:"user_id,omitempty"`
+	DefaultLanguage string `json:"default_language,omitempty"`
+	LastSlug        string `json:"last_slug,omitempty"`
 }
 
 // TokenUserInfo holds user identity parsed from the Chanomhub JWT token
@@ -83,6 +87,9 @@ func ParseTokenUserInfo(token string) (*TokenUserInfo, error) {
 	for _, k := range []string{"sub", "id", "user_id", "userId"} {
 		if v, ok := claims[k].(string); ok && v != "" {
 			info.UserID = v
+			break
+		} else if v, ok := claims[k].(float64); ok {
+			info.UserID = fmt.Sprintf("%.0f", v)
 			break
 		}
 	}

@@ -12,11 +12,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
 	"nst-go/pkg/app"
 	"nst-go/pkg/model"
+	"nst-go/pkg/plugins/chanomhub"
 	"nst-go/pkg/registry"
 	"nst-go/pkg/storage"
 	"nst-go/pkg/translator/custom"
@@ -71,6 +73,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/projects/register", s.handleRegisterProject)
 	mux.HandleFunc("/api/project/merge", s.handleMerge)
 	mux.HandleFunc("/api/publish/chanomhub", s.handlePublishChanomhub)
+	mux.HandleFunc("/api/chanomhub/whoami", s.handleChanomhubWhoami)
+	mux.HandleFunc("/api/chanomhub/login", s.handleChanomhubLogin)
+	mux.HandleFunc("/api/chanomhub/logout", s.handleChanomhubLogout)
 	mux.HandleFunc("/api/system/stats", s.handleSystemStats)
 	mux.HandleFunc("/api/providers", s.handleListProviders)
 	mux.HandleFunc("/api/providers/custom", s.handleSaveCustomProvider)
@@ -480,11 +485,16 @@ func (s *Server) handlePublishChanomhub(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	token := strings.TrimSpace(req.Token)
+	if token == "" {
+		token = chanomhub.GetEffectiveToken()
+	}
+
 	ctx := context.Background()
 	res, err := app.Publish(ctx, app.PublishOptions{
 		GameDir:  req.GamePath,
 		Slug:     req.Slug,
-		Token:    req.Token,
+		Token:    token,
 		Language: req.Language,
 	})
 	if err != nil {
@@ -493,6 +503,57 @@ func (s *Server) handlePublishChanomhub(w http.ResponseWriter, r *http.Request) 
 	}
 
 	jsonResponse(w, res)
+}
+
+func (s *Server) handleChanomhubWhoami(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	info, registry, err := chanomhub.Whoami(ctx)
+	if err != nil {
+		jsonResponse(w, map[string]interface{}{
+			"logged_in": false,
+			"error":     err.Error(),
+		})
+		return
+	}
+	jsonResponse(w, map[string]interface{}{
+		"logged_in": true,
+		"user":      info,
+		"registry":  registry,
+	})
+}
+
+func (s *Server) handleChanomhubLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, "Method not allowed", 405)
+		return
+	}
+
+	var req chanomhub.LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonError(w, err.Error(), 400)
+		return
+	}
+
+	res, err := chanomhub.Login(r.Context(), req)
+	if err != nil {
+		jsonError(w, err.Error(), 401)
+		return
+	}
+
+	jsonResponse(w, res)
+}
+
+func (s *Server) handleChanomhubLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, "Method not allowed", 405)
+		return
+	}
+
+	_ = chanomhub.ClearConfig()
+	jsonResponse(w, map[string]interface{}{
+		"success": true,
+		"message": "Logged out successfully",
+	})
 }
 
 func (s *Server) handleSystemStats(w http.ResponseWriter, r *http.Request) {
