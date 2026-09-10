@@ -71,8 +71,79 @@ type Workspace struct {
 	project *model.Project
 }
 
+// GetNSTHomeDir returns ~/.nst directory path, ensuring it exists
+func GetNSTHomeDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "."
+	}
+	nstDir := filepath.Join(home, ".nst")
+	_ = os.MkdirAll(nstDir, 0755)
+	return nstDir
+}
+
+// ResolveWorkspacePath automatically resolves workspace paths to ~/.nst/<name>.nst
+// if no explicit relative/absolute directory path is provided.
+func ResolveWorkspacePath(wsPath string, gamePath ...string) string {
+	nstDir := GetNSTHomeDir()
+	trimmed := strings.TrimSpace(wsPath)
+
+	// 1. If wsPath is empty or legacy default "workspace.nst", and gamePath is given:
+	if (trimmed == "" || trimmed == "workspace.nst") && len(gamePath) > 0 && strings.TrimSpace(gamePath[0]) != "" {
+		gameBase := filepath.Base(filepath.Clean(gamePath[0]))
+		if gameBase != "" && gameBase != "." && gameBase != "/" {
+			return filepath.Join(nstDir, gameBase+".nst")
+		}
+	}
+
+	// 2. If wsPath contains directory separators (e.g. "./custom.nst", "/tmp/ws.nst", "subdir/ws.nst"):
+	if strings.Contains(trimmed, "/") || strings.Contains(trimmed, "\\") {
+		return trimmed
+	}
+
+	// 3. If wsPath is empty or legacy default and no gamePath given:
+	if trimmed == "" || trimmed == "workspace.nst" {
+		// If workspace.nst exists in current dir, keep backward compatibility
+		if _, err := os.Stat("workspace.nst"); err == nil {
+			return "workspace.nst"
+		}
+		return filepath.Join(nstDir, "workspace.nst")
+	}
+
+	// 4. Plain name provided (e.g. "idol", "idol.nst"):
+	// Check if already exists in current working directory
+	if fi, err := os.Stat(trimmed); err == nil && !fi.IsDir() {
+		return trimmed
+	}
+
+	name := trimmed
+	if !strings.HasSuffix(strings.ToLower(name), ".nst") {
+		name += ".nst"
+	}
+
+	if fi, err := os.Stat(name); err == nil && !fi.IsDir() {
+		return name
+	}
+
+	// Check if exists in ~/.nst/workspaces/
+	wsSubdir := filepath.Join(nstDir, "workspaces", name)
+	if fi, err := os.Stat(wsSubdir); err == nil && !fi.IsDir() {
+		return wsSubdir
+	}
+
+	// Check if exists in ~/.nst/<name>
+	nstFile := filepath.Join(nstDir, name)
+	if fi, err := os.Stat(nstFile); err == nil && !fi.IsDir() {
+		return nstFile
+	}
+
+	// Default destination for new workspaces: ~/.nst/<name>
+	return nstFile
+}
+
 // Open opens an existing workspace file. It returns an error if the file does not exist.
 func Open(wsPath string) (*Workspace, error) {
+	wsPath = ResolveWorkspacePath(wsPath)
 	if _, err := os.Stat(wsPath); err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("workspace file does not exist: %s", wsPath)
@@ -128,9 +199,7 @@ func CreateFromGame(gamePath, wsPath, srcLang, tgtLang string, engine ...string)
 		return nil, nil, fmt.Errorf("extraction failed: %w", err)
 	}
 
-	if wsPath == "" {
-		wsPath = "workspace.nst"
-	}
+	wsPath = ResolveWorkspacePath(wsPath, absGamePath)
 
 	store, err := storage.Open(wsPath)
 	if err != nil {

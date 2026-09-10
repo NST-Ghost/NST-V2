@@ -136,7 +136,7 @@ Examples:
 func handleExtract(args []string) {
 	fs := flag.NewFlagSet("extract", flag.ExitOnError)
 	gamePath := fs.String("path", "", "Path to game root directory (required)")
-	wsPath := fs.String("workspace", "workspace.nst", "Output .nst workspace file")
+	wsPath := fs.String("workspace", "", "Output .nst workspace file (defaults to ~/.nst/<game_name>.nst)")
 	srcLang := fs.String("source-lang", "Japanese", "Source language")
 	tgtLang := fs.String("target-lang", "Thai", "Target language")
 	engineFlag := fs.String("engine", "", "Game engine (optional: rpgm, renpy, godot, unity)")
@@ -148,7 +148,8 @@ func handleExtract(args []string) {
 		os.Exit(1)
 	}
 
-	ws, stats, err := app.CreateFromGame(*gamePath, *wsPath, *srcLang, *tgtLang, *engineFlag)
+	resolvedWs := app.ResolveWorkspacePath(*wsPath, *gamePath)
+	ws, stats, err := app.CreateFromGame(*gamePath, resolvedWs, *srcLang, *tgtLang, *engineFlag)
 	if err != nil {
 		fmt.Printf("Extraction failed: %v\n", err)
 		os.Exit(1)
@@ -161,13 +162,13 @@ func handleExtract(args []string) {
 	fmt.Printf("   Total Entries : %d\n", stats.TotalEntries)
 	fmt.Printf("   Unique Texts  : %d\n", stats.UniqueTexts)
 	fmt.Printf("   Total Words   : %d\n", stats.TotalWords)
-	fmt.Printf("   Workspace File: %s\n", *wsPath)
+	fmt.Printf("   Workspace File: %s\n", ws.Path())
 	fmt.Println("------------------------------------------")
 }
 
 func handleTranslate(args []string) {
 	fs := flag.NewFlagSet("translate", flag.ExitOnError)
-	wsPath := fs.String("workspace", "workspace.nst", "Path to .nst workspace file")
+	wsPath := fs.String("workspace", "", "Path to .nst workspace file (or game name in ~/.nst/)")
 	providerName := fs.String("provider", "mock", "Provider: mock, gemini, openai, google, or custom (e.g. gpt)")
 	apiKey := fs.String("api-key", os.Getenv("NST_API_KEY"), "API Key (or env NST_API_KEY)")
 	modelName := fs.String("model", "", "Model name (e.g. gemini-2.5-flash, gpt-4o-mini, deepseek-v4-pro-0813)")
@@ -265,7 +266,7 @@ func handleTranslate(args []string) {
 func handleInject(args []string) {
 	fs := flag.NewFlagSet("inject", flag.ExitOnError)
 	gamePath := fs.String("path", "", "Path to game root directory (required)")
-	wsPath := fs.String("workspace", "workspace.nst", "Path to .nst workspace file")
+	wsPath := fs.String("workspace", "", "Path to .nst workspace file (defaults to ~/.nst/<game_name>.nst)")
 	destPath := fs.String("dest", "", "Destination path for patched game (required)")
 	fs.Parse(args)
 
@@ -275,7 +276,7 @@ func handleInject(args []string) {
 		os.Exit(1)
 	}
 
-	ws, err := app.Open(*wsPath)
+	ws, err := app.Open(app.ResolveWorkspacePath(*wsPath, *gamePath))
 	if err != nil {
 		fmt.Printf("Failed to open workspace: %v\n", err)
 		os.Exit(1)
@@ -297,7 +298,7 @@ func handleInject(args []string) {
 func handleDeploy(args []string) {
 	fs := flag.NewFlagSet("deploy", flag.ExitOnError)
 	gamePath := fs.String("path", "", "Path to game root directory (required)")
-	wsPath := fs.String("workspace", "workspace.nst", "Path to .nst workspace file")
+	wsPath := fs.String("workspace", "", "Path to .nst workspace file (defaults to ~/.nst/<game_name>.nst)")
 	langName := fs.String("lang", "Thai", "Display name of translated language")
 	fs.Parse(args)
 
@@ -307,7 +308,7 @@ func handleDeploy(args []string) {
 		os.Exit(1)
 	}
 
-	ws, err := app.Open(*wsPath)
+	ws, err := app.Open(app.ResolveWorkspacePath(*wsPath, *gamePath))
 	if err != nil {
 		fmt.Printf("Failed to open workspace: %v\n", err)
 		os.Exit(1)
@@ -341,16 +342,17 @@ func handleDeploy(args []string) {
 func handleMerge(args []string) {
 	fs := flag.NewFlagSet("merge", flag.ExitOnError)
 	newGamePath := fs.String("new-game", "", "Path to new/updated game folder (required)")
-	wsPath := fs.String("workspace", "workspace.nst", "Path to existing .nst workspace (required)")
+	wsPath := fs.String("workspace", "", "Path to existing .nst workspace (defaults to ~/.nst/<game_name>.nst)")
 	fs.Parse(args)
 
-	if *newGamePath == "" || *wsPath == "" {
-		fmt.Println("Error: -new-game and -workspace are required")
+	if *newGamePath == "" {
+		fmt.Println("Error: -new-game is required")
 		fs.Usage()
 		os.Exit(1)
 	}
 
-	ws, err := app.Open(*wsPath)
+	resolvedWs := app.ResolveWorkspacePath(*wsPath, *newGamePath)
+	ws, err := app.Open(resolvedWs)
 	if err != nil {
 		fmt.Printf("Failed to open workspace: %v\n", err)
 		os.Exit(1)
@@ -376,10 +378,11 @@ func handleMerge(args []string) {
 
 func handleStatus(args []string) {
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
-	wsPath := fs.String("workspace", "workspace.nst", "Path to .nst workspace file")
+	wsPath := fs.String("workspace", "", "Path to .nst workspace file (or game name in ~/.nst/)")
 	fs.Parse(args)
 
-	ws, err := app.Open(*wsPath)
+	resolvedWs := app.ResolveWorkspacePath(*wsPath)
+	ws, err := app.Open(resolvedWs)
 	if err != nil {
 		fmt.Printf("Failed to open workspace: %v\n", err)
 		os.Exit(1)
@@ -754,7 +757,8 @@ func handleImportCache(args []string) {
 		os.Exit(1)
 	}
 
-	store, err := storage.Open(*wsPath)
+	resolvedWS := app.ResolveWorkspacePath(*wsPath)
+	store, err := storage.Open(resolvedWS)
 	if err != nil {
 		fmt.Printf("Failed to open workspace: %v\n", err)
 		os.Exit(1)
@@ -845,7 +849,7 @@ func handleMeta(args []string) {
 		os.Exit(1)
 	}
 
-	ws, err := app.Open(*wsPath)
+	ws, err := app.Open(app.ResolveWorkspacePath(*wsPath))
 	if err != nil {
 		fmt.Printf("Failed to open workspace: %v\n", err)
 		os.Exit(1)
@@ -910,14 +914,14 @@ func handleExportPatch(args []string) {
 		os.Exit(1)
 	}
 
-	ws, err := app.Open(*wsPath)
+	ws, err := app.Open(app.ResolveWorkspacePath(*wsPath))
 	if err != nil {
 		fmt.Printf("Failed to open workspace: %v\n", err)
 		os.Exit(1)
 	}
 	defer ws.Close()
 
-	fmt.Printf("📦 Exporting distribution patch from %s ...\n", *wsPath)
+	fmt.Printf("📦 Exporting distribution patch from %s ...\n", app.ResolveWorkspacePath(*wsPath))
 	pkg, actualPath, err := ws.ExportPatch(*outputPath)
 	if err != nil {
 		fmt.Printf("Export failed: %v\n", err)
@@ -955,14 +959,15 @@ func handleImportPatch(args []string) {
 		os.Exit(1)
 	}
 
-	ws, err := app.Open(*wsPath)
+	resolvedWS := app.ResolveWorkspacePath(*wsPath)
+	ws, err := app.Open(resolvedWS)
 	if err != nil {
 		fmt.Printf("Failed to open workspace: %v\n", err)
 		os.Exit(1)
 	}
 	defer ws.Close()
 
-	fmt.Printf("🔄 Importing & re-hydrating patch [%s] into [%s] ...\n", *patchPath, *wsPath)
+	fmt.Printf("🔄 Importing & re-hydrating patch [%s] into [%s] ...\n", *patchPath, resolvedWS)
 	stats, err := ws.ImportPatch(*patchPath)
 	if err != nil {
 		fmt.Printf("Import failed: %v\n", err)
