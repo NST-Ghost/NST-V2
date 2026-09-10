@@ -648,12 +648,45 @@ func handleLogin(args []string) {
 		return
 	}
 
-	// 3. Interactive email + password prompt (Chanomhub uses credential auth, not OAuth)
+	// 3. Interactive email + password prompt, or guide user to generate token
 	fmt.Printf("🔐 Chanomhub Login (%s)\n\n", targetRegistry)
+	fmt.Println("Choose login method:")
+	fmt.Println("  1) Email + Password")
+	fmt.Println("  2) Paste API token (for Google/social login users)")
+	fmt.Print("\nChoice [1/2]: ")
 
 	reader := bufio.NewReader(os.Stdin)
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
 
-	fmt.Print("Email or username: ")
+	if choice == "2" || choice == "" {
+		webBase := chanomhub.GetEffectiveWebURL()
+		fmt.Printf("\n👉 Go to %s/member/dashboard/tokens\n", webBase)
+		fmt.Println("   → Create a new token (select duration: forever)")
+		fmt.Println("   → Copy the token and paste it below\n")
+		fmt.Print("Token: ")
+		tokenInput, _ := reader.ReadString('\n')
+		tokenInput = strings.TrimSpace(tokenInput)
+		if tokenInput == "" {
+			fmt.Println("❌ Token is required")
+			os.Exit(1)
+		}
+		ctx := context.Background()
+		res, err := chanomhub.Login(ctx, chanomhub.LoginRequest{
+			Token:      tokenInput,
+			APIBase:    targetRegistry,
+			StorageURL: *storageURL,
+		})
+		if err != nil {
+			fmt.Printf("❌ Login failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("✅ Logged in as %s to %s\n", res.UserInfo.Username, res.APIBase)
+		return
+	}
+
+	// Email + password
+	fmt.Print("\nEmail or username: ")
 	emailInput, _ := reader.ReadString('\n')
 	emailInput = strings.TrimSpace(emailInput)
 	if emailInput == "" {
@@ -664,7 +697,6 @@ func handleLogin(args []string) {
 	fmt.Print("Password: ")
 	passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
 	if err != nil {
-		// fallback if not a real terminal
 		line, _ := reader.ReadString('\n')
 		passwordBytes = []byte(line)
 	}
