@@ -21,6 +21,8 @@ import (
 	"nst-go/pkg/storage"
 	"nst-go/pkg/translator/prompts"
 	"nst-go/pkg/webui"
+
+	"golang.org/x/term"
 )
 
 var version = "2.1.0 (Go Pure Cross-Platform)"
@@ -595,27 +597,20 @@ func handlePublish(args []string) {
 
 func handleLogin(args []string) {
 	fs := flag.NewFlagSet("login", flag.ExitOnError)
-	webURL := fs.String("web-url", "", "Chanomhub web portal URL (defaults to CHANOMHUB_WEB_URL or https://chanomhub.com)")
 	apiBase := fs.String("registry", "", "Chanomhub registry / API base URL")
 	fs.StringVar(apiBase, "api-base", "", "Chanomhub registry / API base URL (alias)")
 	storageURL := fs.String("storage-url", "", "Custom storage URL")
-	token := fs.String("token", "", "Direct token authentication (bypasses browser login)")
+	token := fs.String("token", "", "Direct token authentication (bypasses interactive login)")
 	fs.StringVar(token, "t", "", "Direct token authentication (shorthand)")
-	username := fs.String("username", "", "Username or email (classic credentials login)")
+	username := fs.String("username", "", "Username or email")
 	fs.StringVar(username, "u", "", "Username or email (shorthand)")
-	password := fs.String("password", "", "Password (classic credentials login)")
+	password := fs.String("password", "", "Password")
 	fs.StringVar(password, "p", "", "Password (shorthand)")
-	port := fs.Int("port", 0, "Custom local callback port (defaults to 0 for random free port)")
 	fs.Parse(args)
 
 	targetRegistry := *apiBase
 	if targetRegistry == "" {
 		targetRegistry = chanomhub.GetEffectiveAPIBase()
-	}
-
-	targetWeb := *webURL
-	if targetWeb == "" {
-		targetWeb = chanomhub.GetEffectiveWebURL()
 	}
 
 	// 1. Direct token login
@@ -653,67 +648,42 @@ func handleLogin(args []string) {
 		return
 	}
 
-	// 3. Web-based browser login flow (Universal OAuth/PKCE-style)
-	stateNonce := chanomhub.GenerateSecureState()
+	// 3. Interactive email + password prompt (Chanomhub uses credential auth, not OAuth)
+	fmt.Printf("🔐 Chanomhub Login (%s)\n\n", targetRegistry)
 
-	actualPort, tokenChan, cleanup, err := chanomhub.StartLocalCallbackServer(*port, stateNonce)
-	if err != nil {
-		fmt.Printf("Error starting local callback server: %v\n", err)
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Print("Email or username: ")
+	emailInput, _ := reader.ReadString('\n')
+	emailInput = strings.TrimSpace(emailInput)
+	if emailInput == "" {
+		fmt.Println("❌ Email/username is required")
 		os.Exit(1)
 	}
-	defer cleanup()
 
-	callbackURI := fmt.Sprintf("http://127.0.0.1:%d/callback", actualPort)
-	authURL := chanomhub.BuildAuthorizationURL(
-		targetWeb,
-		"nst-cli",
-		"NST (Novelty Translation Tool)",
-		callbackURI,
-		stateNonce,
-	)
-
-	fmt.Println("🔐 Chanomhub Login")
+	fmt.Print("Password: ")
+	passwordBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+	if err != nil {
+		// fallback if not a real terminal
+		line, _ := reader.ReadString('\n')
+		passwordBytes = []byte(line)
+	}
 	fmt.Println()
-	fmt.Printf("Authenticate your account at:\n👉 %s\n\n", authURL)
-	fmt.Println("Opening browser automatically... (or copy and paste the link above)")
-	_ = chanomhub.OpenBrowser(authURL)
-
-	fmt.Println()
-	fmt.Println("Waiting for web authentication... (or paste token below)")
-	fmt.Print("Token: ")
-
-	stdinChan := make(chan string, 1)
-	go func() {
-		reader := bufio.NewReader(os.Stdin)
-		line, err := reader.ReadString('\n')
-		if err == nil {
-			t := strings.TrimSpace(line)
-			if t != "" {
-				stdinChan <- t
-			}
-		}
-	}()
-
-	var finalToken string
-	select {
-	case tok := <-tokenChan:
-		fmt.Println("\n\nReceived authorization from browser! 🚀")
-		finalToken = tok
-	case tok := <-stdinChan:
-		finalToken = tok
-	case <-time.After(5 * time.Minute):
-		fmt.Println("\n❌ Login timed out waiting for authorization.")
+	passwordInput := strings.TrimSpace(string(passwordBytes))
+	if passwordInput == "" {
+		fmt.Println("❌ Password is required")
 		os.Exit(1)
 	}
 
 	ctx := context.Background()
 	res, err := chanomhub.Login(ctx, chanomhub.LoginRequest{
-		Token:      finalToken,
-		APIBase:    targetRegistry,
-		StorageURL: *storageURL,
+		UsernameOrEmail: emailInput,
+		Password:        passwordInput,
+		APIBase:         targetRegistry,
+		StorageURL:      *storageURL,
 	})
 	if err != nil {
-		fmt.Printf("❌ Login verification failed: %v\n", err)
+		fmt.Printf("❌ Login failed: %v\n", err)
 		os.Exit(1)
 	}
 
