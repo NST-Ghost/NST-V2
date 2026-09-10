@@ -11,6 +11,7 @@
 
 # SQLite & Runtime data
 *.nst
+*.patch.json.gz
 *.db
 *.sqlite
 workspace.nst
