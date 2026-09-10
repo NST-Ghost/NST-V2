@@ -19,6 +19,8 @@ var (
 	dialogPattern = regexp.MustCompile(`^\s*(?:[a-zA-Z_]\w*\s+)?"([^"]+)"`)
 	// Matches menu choices e.g. "Choice 1":
 	menuPattern = regexp.MustCompile(`^\s*"([^"]+)"\s*:`)
+	// Matches translatable gettext strings e.g. Character(_("Name"))
+	transStringPattern = regexp.MustCompile(`_\(\s*["']([^"']+)["']\s*\)`)
 )
 
 type Parser struct{}
@@ -132,8 +134,31 @@ func (p *Parser) extractFile(absPath, relPath string) ([]model.TextEntry, error)
 		line := scanner.Text()
 		trimmed := strings.TrimSpace(line)
 
-		// Skip comments and python script commands
-		if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "$") || trimmed == "" {
+		// Skip comments and empty lines
+		if strings.HasPrefix(trimmed, "#") || trimmed == "" {
+			continue
+		}
+
+		// Check for translatable gettext strings e.g. Character(_("Name"))
+		if strMatches := transStringPattern.FindAllStringSubmatch(line, -1); len(strMatches) > 0 {
+			for matchIdx, sm := range strMatches {
+				sText := sm[1]
+				if strings.TrimSpace(sText) != "" {
+					key := fmt.Sprintf("str_%s_%d_%d", filepath.Base(relPath), lineNum, matchIdx)
+					entries = append(entries, model.TextEntry{
+						ID:        fmt.Sprintf("%s:%s", relPath, key),
+						Source:    sText,
+						FilePath:  relPath,
+						KeyPath:   key,
+						Status:    model.StatusUntranslated,
+						Context:   "String",
+						UpdatedAt: time.Now(),
+					})
+				}
+			}
+		}
+
+		if strings.HasPrefix(trimmed, "$") {
 			continue
 		}
 

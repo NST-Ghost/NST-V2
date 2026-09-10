@@ -320,11 +320,21 @@ func handleDeploy(args []string) {
 		os.Exit(1)
 	}
 
+	engine := ""
+	if ws.Project() != nil {
+		engine = ws.Project().Engine
+	}
+
 	fmt.Println("------------------------------------------")
 	fmt.Println("✅ Deployment completed successfully!")
 	fmt.Printf("   Target: %s\n", *gamePath)
-	fmt.Printf("   Layer : %s/js/plugins/NST_TranslationLayer.js\n", *gamePath)
-	fmt.Printf("   Files : %s/nst_translations/\n", *gamePath)
+	if engine == "renpy" {
+		fmt.Printf("   Layer : %s/game/tl/%s/ (00_nst_font_layer.rpy, script.rpy, screens.rpy)\n", *gamePath, *langName)
+		fmt.Printf("   Fonts : %s/game/fonts/ (Zero-tofu embedded fonts)\n", *gamePath)
+	} else {
+		fmt.Printf("   Layer : %s/js/plugins/NST_TranslationLayer.js\n", *gamePath)
+		fmt.Printf("   Files : %s/nst_translations/\n", *gamePath)
+	}
 	fmt.Println("------------------------------------------")
 }
 

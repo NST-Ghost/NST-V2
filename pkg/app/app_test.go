@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"nst-go/pkg/model"
@@ -162,4 +163,65 @@ func TestCreateTranslator(t *testing.T) {
 		t.Errorf("Expected 'mycustom' in ListAvailableProviders, but not found")
 	}
 }
+
+func TestWorkspaceDeployLayerRenpy(t *testing.T) {
+	tempDir := t.TempDir()
+	wsPath := filepath.Join(tempDir, "renpy_ws.nst")
+	gameDir := filepath.Join(tempDir, "RenpyGame")
+	_ = os.MkdirAll(filepath.Join(gameDir, "game"), 0755)
+
+	store, err := storage.Open(wsPath)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+	_ = store.SaveProject(&model.Project{
+		ID:         "test_renpy",
+		Name:       "Test Renpy Game",
+		SourcePath: gameDir,
+		Engine:     "renpy",
+		SourceLang: "Japanese",
+		TargetLang: "Thai",
+	})
+	_ = store.SaveEntries([]model.TextEntry{
+		{
+			ID:        "dialogue_1",
+			FilePath:  "script.rpy",
+			KeyPath:   "start_test1",
+			Source:    "こんにちは",
+			Target:    "สวัสดีครับ",
+			Status:    model.StatusTranslated,
+		},
+	})
+	store.Close()
+
+	ws, err := Open(wsPath)
+	if err != nil {
+		t.Fatalf("Failed to open workspace: %v", err)
+	}
+	defer ws.Close()
+
+	if err := ws.DeployLayer(gameDir, "Thai"); err != nil {
+		t.Fatalf("DeployLayer failed on Renpy: %v", err)
+	}
+
+	// Verify font file written
+	fontPath := filepath.Join(gameDir, "game", "fonts", "IBMPlexSansThai-Light.otf")
+	if fi, err := os.Stat(fontPath); err != nil || fi.Size() == 0 {
+		t.Errorf("Expected font file at %s", fontPath)
+	}
+
+	// Verify font script written
+	fontScript := filepath.Join(gameDir, "game", "tl", "Thai", "00_nst_font_layer.rpy")
+	if _, err := os.Stat(fontScript); err != nil {
+		t.Errorf("Expected font script at %s", fontScript)
+	}
+
+	// Verify script.rpy written
+	scriptFile := filepath.Join(gameDir, "game", "tl", "Thai", "script.rpy")
+	data, err := os.ReadFile(scriptFile)
+	if err != nil || !strings.Contains(string(data), "สวัสดีครับ") {
+		t.Errorf("Expected translated text in %s", scriptFile)
+	}
+}
+
 

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	renpyInj "nst-go/pkg/injection/renpy"
 	rpgmInj "nst-go/pkg/injection/rpgm"
 	"nst-go/pkg/merger"
 	"nst-go/pkg/model"
@@ -347,7 +348,7 @@ func (w *Workspace) Translate(ctx context.Context, opts TranslateOptions, progre
 	return err
 }
 
-// DeployLayer deploys non-destructive translation layer (RPGM only)
+// DeployLayer deploys non-destructive translation layer (RPGM & Ren'Py)
 func (w *Workspace) DeployLayer(gamePath, langName string) error {
 	w.mu.RLock()
 	store := w.store
@@ -362,12 +363,9 @@ func (w *Workspace) DeployLayer(gamePath, langName string) error {
 		return fmt.Errorf("game path is required for deploy")
 	}
 
-	if proj != nil && proj.Engine != "rpgm" && proj.Engine != "rpgm-mv" && proj.Engine != "rpgm-mz" {
-		// check if detected engine is rpgm
-		p, err := parser.DetectEngine(targetGamePath)
-		if err != nil || (p.Name() != "rpgm" && p.Name() != "rpgm-mv" && p.Name() != "rpgm-mz") {
-			return fmt.Errorf("non-destructive JS layer is only supported for RPG Maker MV/MZ games (engine: %s)", proj.Engine)
-		}
+	engine := ""
+	if proj != nil {
+		engine = proj.Engine
 	}
 
 	entries, err := store.GetEntries("all")
@@ -382,11 +380,38 @@ func (w *Workspace) DeployLayer(gamePath, langName string) error {
 		langName = "Thai"
 	}
 
-	exporter := rpgmInj.NewExporter()
-	return exporter.Deploy(targetGamePath, entries, rpgmInj.DeployOptions{
-		LanguageName:   langName,
-		OnlyTranslated: true,
-	})
+	switch engine {
+	case "renpy":
+		exporter := renpyInj.NewExporter()
+		return exporter.Deploy(targetGamePath, entries, renpyInj.DeployOptions{
+			LanguageName:   langName,
+			OnlyTranslated: true,
+		})
+	case "rpgm", "rpgm-mv", "rpgm-mz":
+		exporter := rpgmInj.NewExporter()
+		return exporter.Deploy(targetGamePath, entries, rpgmInj.DeployOptions{
+			LanguageName:   langName,
+			OnlyTranslated: true,
+		})
+	default:
+		// Attempt auto-detection if engine string wasn't explicitly set
+		if p, err := parser.DetectEngine(targetGamePath); err == nil && p != nil {
+			if p.Name() == "renpy" {
+				exporter := renpyInj.NewExporter()
+				return exporter.Deploy(targetGamePath, entries, renpyInj.DeployOptions{
+					LanguageName:   langName,
+					OnlyTranslated: true,
+				})
+			} else if p.Name() == "rpgm" || p.Name() == "rpgm-mv" || p.Name() == "rpgm-mz" {
+				exporter := rpgmInj.NewExporter()
+				return exporter.Deploy(targetGamePath, entries, rpgmInj.DeployOptions{
+					LanguageName:   langName,
+					OnlyTranslated: true,
+				})
+			}
+		}
+		return fmt.Errorf("non-destructive additive layer is currently supported for RPG Maker (MV/MZ) and Ren'Py engines (engine: %s)", engine)
+	}
 }
 
 // ExportCopy injects translations into a destination directory (copy mode)
