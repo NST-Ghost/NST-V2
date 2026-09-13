@@ -19,25 +19,30 @@ def run_cmd(cmd):
     except subprocess.CalledProcessError:
         return ""
 
-def get_previous_tag(current_tag):
-    # Try finding ancestor tag of current_tag
-    prev = run_cmd(["git", "describe", "--tags", "--abbrev=0", f"{current_tag}^"])
-    if prev and prev != current_tag:
+def get_previous_tag(ref):
+    # Try finding ancestor tag of ref
+    prev = run_cmd(["git", "describe", "--tags", "--abbrev=0", f"{ref}^"])
+    if prev and prev != ref:
         return prev
 
-    # Fallback: find the most recent tag before current_tag
+    # If ref is HEAD or a commit not yet tagged, git describe finds the latest existing tag
+    latest = run_cmd(["git", "describe", "--tags", "--abbrev=0", ref])
+    if latest and latest != ref:
+        return latest
+
+    # Fallback: find the most recent tag before ref
     all_tags = run_cmd(["git", "tag", "--sort=-v:refname"]).splitlines()
     for t in all_tags:
         t = t.strip()
-        if t and t != current_tag:
+        if t and t != ref:
             return t
     return ""
 
-def get_commits(prev_tag, current_tag):
+def get_commits(prev_tag, target_ref):
     if prev_tag:
-        commit_range = f"{prev_tag}..{current_tag}"
+        commit_range = f"{prev_tag}..{target_ref}"
     else:
-        commit_range = current_tag
+        commit_range = target_ref
 
     output = run_cmd(["git", "log", commit_range, "--pretty=format:%h\t%s\t%an"])
     commits = []
@@ -251,13 +256,18 @@ def main():
         if not current_tag:
             current_tag = "HEAD"
 
+    # Resolve target git revision: if current_tag is not yet a git tag in the local repo, use HEAD
+    target_ref = current_tag
+    if not run_cmd(["git", "rev-parse", "--verify", f"{current_tag}^{{commit}}"]):
+        target_ref = "HEAD"
+
     prev_tag = args.prev_tag
     if not prev_tag:
-        prev_tag = get_previous_tag(current_tag)
+        prev_tag = get_previous_tag(target_ref)
 
-    print(f"[Release Notes] Target: {current_tag} | Previous: {prev_tag or 'None'} | Repo: {args.repo}")
+    print(f"[Release Notes] Target: {current_tag} (ref: {target_ref}) | Previous: {prev_tag or 'None'} | Repo: {args.repo}")
 
-    commits = get_commits(prev_tag, current_tag)
+    commits = get_commits(prev_tag, target_ref)
     print(f"[Release Notes] Found {len(commits)} commits")
 
     categories = categorize_commits(commits)
