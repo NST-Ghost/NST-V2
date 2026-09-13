@@ -20,12 +20,19 @@ import (
 	"nst-go/pkg/registry"
 	"nst-go/pkg/storage"
 	"nst-go/pkg/translator/prompts"
+	appVersion "nst-go/pkg/version"
 	"nst-go/pkg/webui"
 
 	"golang.org/x/term"
 )
 
-var version = "2.2.0 (Go Pure Cross-Platform)"
+var version = ""
+
+func init() {
+	if version == "" {
+		version = appVersion.FullVersion()
+	}
+}
 
 func main() {
 	// Enforce 64 MiB soft memory ceiling on Go runtime to prevent heap ballooning

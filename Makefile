@@ -1,8 +1,11 @@
-.PHONY: all build test clean cross-compile
+.PHONY: all build test clean cross-compile bump
 
 BINARY_NAME=nst
 VERSION ?= $(shell cat VERSION 2>/dev/null || echo "2.0.0")
-LDFLAGS=-s -w -X 'main.version=$(VERSION)'
+LDFLAGS=-s -w -X 'main.version=$(VERSION)' -X 'nst-go/pkg/version.Version=$(VERSION)'
+
+bump:
+	@./scripts/bump.sh $(v)
 
 all: test build
 

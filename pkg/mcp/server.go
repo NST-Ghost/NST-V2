@@ -21,6 +21,7 @@ import (
 	"nst-go/pkg/translator/gemini"
 	"nst-go/pkg/translator/mock"
 	"nst-go/pkg/translator/openai"
+	"nst-go/pkg/version"
 )
 
 // Server represents an MCP (Model Context Protocol) Server
@@ -125,7 +126,7 @@ func (s *Server) HandleRequest(ctx context.Context, req *RPCRequest) *RPCRespons
 				"protocolVersion": "2024-11-05",
 				"serverInfo": map[string]string{
 					"name":    "nst-server",
-					"version": "2.2.0-go",
+					"version": version.Get() + "-go",
 				},
 				"capabilities": map[string]interface{}{
 					"tools": map[string]interface{}{},

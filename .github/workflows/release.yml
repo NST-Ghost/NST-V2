@@ -134,11 +134,11 @@ jobs:
           OUTPUT_NAME="nst${{ matrix.ext }}"
           mkdir -p bin
           # 1. Build CLI (Always Pure Go CGO_ENABLED=0)
-          CGO_ENABLED=0 go build -ldflags="-s -w -X 'main.version=${VER}'" -o "bin/${OUTPUT_NAME}" ./cmd/nst
+          CGO_ENABLED=0 go build -ldflags="-s -w -X 'main.version=${VER}' -X 'nst-go/pkg/version.Version=${VER}'" -o "bin/${OUTPUT_NAME}" ./cmd/nst
 
           # 2. Build Native Desktop GUI for Linux amd64
           if [ "${{ matrix.os }}" = "linux" ] && [ "${{ matrix.arch }}" = "amd64" ]; then
-            CGO_ENABLED=1 go build -tags gtk3 -ldflags="-s -w -X 'main.version=${VER}'" -o "bin/nst-desktop" ./cmd/nst-desktop
+            CGO_ENABLED=1 go build -tags gtk3 -ldflags="-s -w -X 'main.version=${VER}' -X 'nst-go/pkg/version.Version=${VER}'" -o "bin/nst-desktop" ./cmd/nst-desktop
           fi
 
       - name: Package Archive

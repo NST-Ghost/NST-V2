@@ -3,9 +3,16 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import wails from "@wailsio/runtime/plugins/vite";
 import path from "path";
+import fs from "fs";
+
+// Read version directly from root VERSION file (Single Source of Truth)
+const appVersion = fs.readFileSync(path.resolve(__dirname, "../VERSION"), "utf-8").trim();
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
