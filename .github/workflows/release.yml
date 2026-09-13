@@ -187,6 +187,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download All Artifacts
         uses: actions/download-artifact@v4
@@ -211,6 +213,19 @@ jobs:
           path: release_dist/*
           retention-days: 30
 
+      - name: Generate Release Notes & AI Summary
+        id: release_notes
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 .github/scripts/generate_release_notes.py \
+            --current-tag "${{ needs.check-and-test.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --output release_notes.md
+          cat release_notes.md
+
       - name: Create GitHub Release
         if: needs.check-and-test.outputs.is_release == 'true'
         uses: softprops/action-gh-release@v2
@@ -220,7 +235,7 @@ jobs:
           target_commitish: ${{ github.sha }}
           draft: false
           prerelease: ${{ contains(needs.check-and-test.outputs.version, '-alpha') || contains(needs.check-and-test.outputs.version, '-beta') || contains(needs.check-and-test.outputs.version, '-rc') }}
-          generate_release_notes: true
+          body_path: release_notes.md
           files: release_dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
