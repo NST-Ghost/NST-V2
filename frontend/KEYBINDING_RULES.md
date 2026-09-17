@@ -1,41 +1,43 @@
 # NST Keyboard Shortcut & Command Architecture Governance
 
-> **มาตรฐานการจัดการคีย์ลัดและคำสั่งส่วนกลาง (Central Command & Keybinding Standard)**  
-> รองรับคีย์ลัดระดับร้อยคำสั่ง ครอบคลุมผู้ใช้ทุกภาษาในโลก (100% W3C Hardware Code Standard) ปราศจากการ Hardcode ภาษา และมีระบบตรวจจับบั๊กอัตโนมัติ
+> **Central Command & Keybinding Standard**  
+> Scalable shortcut engine supporting hundreds of commands across global keyboard layouts (100% W3C Hardware Code Standard), completely free of hardcoded language mappings, with automated CI enforcement and real-time debugging tools.
 
 ---
 
-## 1. กฎเหล็ก 5 ข้อของระบบคีย์ลัด (The 5 Golden Rules)
+## 1. The 5 Golden Rules of Keybinding Governance
 
-1. **ห้ามเขียน `addEventListener('keydown', ...)` ใน Component เด็ดขาด**
-   * ระบบมี Single Event Listener ประจำอยู่ที่ Root (`CommandProvider`) จุดเดียว
-   * หากฝ่าฝืน `npm run check:ui` จะตรวจพบและตีเป็น **ERROR ทันที**
-2. **ห้ามตรวจจับด้วย `e.key === 'x'` สำหรับคีย์ลัดที่กดร่วมกับ `Ctrl`, `Alt`, หรือ `Meta`**
-   * เพราะ `e.key` จะเปลี่ยนค่าตามภาษาแป้นพิมพ์ของผู้ใช้ (เช่น กด `F` ตอนแป้นไทยจะได้ `"ด"`, รัสเซียจะได้ `"а"`)
-   * ระบบถอดรหัสส่วนกลางจะแปลงเป็น **Physical Hardware Key Code (`e.code`)** เช่น `"KeyF"`, `"KeyO"`, `"Enter"` โดยอัตโนมัติ
-3. **ลงทะเบียนคีย์ลัดผ่าน `useCommands()` เสมอ**
-   * เพื่อให้คีย์ลัดถูกผูก (Register) และปลด (Unregister) อัตโนมัติตาม Lifecycle ของหน้าจอ ไม่ให้มีคีย์ลัดค้างหรือเกิด Memory Leak
-4. **กำหนด Scope เสมอหากเป็นคีย์ลัดเฉพาะหน้า**
-   * คีย์ลัดของแอปพลิเคชันภาพรวม = `scope: "global"`
-   * คีย์ลัดเฉพาะหน้าตารางข้อความ = `scope: "editor"`
-   * เพื่อป้องกันไม่ให้คำสั่งข้ามหน้าทำงานทับซ้อนกันเมื่อแอปเติบโตขึ้น
-5. **ระบุ `preventInInput: true` (ค่าเริ่มต้น) สำหรับคีย์ลัดตัวอักษร**
-   * เพื่อป้องกันไม่ให้คีย์ลัดทำงานกวนเวลาผู้ใช้กำลังพิมพ์ข้อความใน `<input>` หรือ `<textarea>` (ยกเว้นคำสั่งเฉพาะ เช่น `Ctrl+Enter` หรือ `Escape` ที่อนุญาตให้ระบุ `preventInInput: false`)
+1. **NEVER attach `addEventListener('keydown', ...)` or `document.addEventListener('keydown', ...)` in components**
+   * The application uses a single centralized event listener attached at the root (`CommandProvider`).
+   * Ad-hoc event listeners bypass command scoping, input suppression, and diagnostics. Any violation will be caught by `npm run check:ui` and flagged as a fatal **ERROR**.
+2. **NEVER test `e.key === 'x'` for shortcuts involving `Ctrl`, `Alt`, or `Meta` modifiers**
+   * `e.key` resolves to the localized character of the active keyboard layout (e.g. pressing the physical `F` key yields `"ด"` in Thai, `"а"` in Russian, `"ب"` in Arabic).
+   * The central key normalizer maps physical keystrokes to **W3C Physical Hardware Key Codes (`e.code`)** (e.g. `"KeyF"`, `"KeyO"`, `"Enter"`, `"Comma"`), guaranteeing global compatibility across all 190+ languages without manual layout dictionaries.
+3. **ALWAYS register shortcuts via `useCommands()` or `registry.register()`**
+   * This ties shortcuts to component lifecycles, automatically cleaning up bindings on unmount to prevent lingering shortcuts and memory leaks.
+4. **ALWAYS specify an explicit `scope` for view-specific shortcuts**
+   * Application-wide shortcuts = `scope: "global"`
+   * String editor table shortcuts = `scope: "editor"`
+   * Modal dialog shortcuts = `scope: "modal"`
+   * Scoping isolates commands and prevents shortcut collision as the application scales to hundreds of commands.
+5. **Enforce `preventInInput: true` (default) for character-based shortcuts**
+   * Prevents shortcuts from firing while the user is actively typing in an `<input>`, `<textarea>`, or `contenteditable` field.
+   * Dedicated navigation shortcuts (e.g. `Ctrl+Enter` to submit, `Escape` to blur/close) can explicitly opt out via `preventInInput: false`.
 
 ---
 
-## 2. วิธีใช้งานใน Component
+## 2. Component Usage & Patterns
 
-### การลงทะเบียนคำสั่งทั่วไป (`useCommands`)
+### Registering Scoped Commands (`useCommands` & `useActiveScope`)
 
 ```tsx
 import { useCommands, useActiveScope } from "@/lib/commands";
 
 export const MyFeatureComponent = () => {
-  // 1. ระบุ Scope ให้กับหน้านี้ (จะคืนค่า Scope เดิมให้อัตโนมัติเมื่อปิดหน้านี้)
+  // 1. Declare active scope for this view (restores previous scope on unmount)
   useActiveScope("my-feature");
 
-  // 2. ลงทะเบียนคำสั่ง
+  // 2. Register commands with automatic lifecycle cleanup
   useCommands([
     {
       id: "my-feature.save",
@@ -50,7 +52,7 @@ export const MyFeatureComponent = () => {
       title: "Refresh Data",
       keybinding: "Ctrl+R",
       scope: "my-feature",
-      when: () => isReadyToRefresh, // ตรวจสอบเงื่อนไขก่อนรัน
+      when: () => isReadyToRefresh, // Guard condition evaluated before execution
       run: () => handleRefresh(),
     },
   ]);
@@ -59,58 +61,80 @@ export const MyFeatureComponent = () => {
 };
 ```
 
+### Component-Local Keystroke Handling (Inputs & Modals)
+
+If you must handle keystrokes directly on an element's `onKeyDown` (such as inline editor commit or cancel):
+* **ALWAYS** inspect `e.code` (e.g. `e.code === "Enter"`, `e.code === "Escape"`).
+* **NEVER** inspect `e.key` for shortcuts or modifier combinations.
+
+```tsx
+<Input
+  value={value}
+  onKeyDown={(e) => {
+    if (e.code === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      handleCommit();
+    } else if (e.code === "Escape") {
+      e.preventDefault();
+      handleCancel();
+    }
+  }}
+/>
+```
+
 ---
 
-## 3. วิธีการดีบั๊กและตรวจสอบบั๊ก (Debugging & Diagnostics)
+## 3. Debugging & Diagnostics (Runtime Troubleshooting)
 
-เมื่อมีผู้ใช้รายงานว่า *"คีย์ลัดปุ่มนี้กดไม่ติด"* สามารถตรวจสอบได้ทันทีภายใน 10 วินาทีผ่าน **Browser DevTools Console (F12 หรือ Inspect)**:
+When investigating shortcut issues or user reports, diagnose the command system in seconds via the **Browser / Desktop DevTools Console (`Ctrl+Shift+I` or Inspect)**:
 
-### 1. เปิดโหมด Debug Console
-พิมพ์คำสั่งนี้ใน Console ของ DevTools:
+### 1. Enable Verbose Debug Logging
+Run in the DevTools Console:
 ```js
 __NST_COMMANDS__.setDebug(true)
 ```
-หรือตั้งค่าแบบ Global Flag:
+Or set the global window flag before application load:
 ```js
 window.__NST_KEYBINDINGS_DEBUG__ = true
 ```
 
-### 2. ดู Log วิเคราะห์การกดปุ่มแบบ Real-time
-เมื่อกดปุ่มบนคีย์บอร์ด ระบบจะแสดง Log บอกสถานะทุกอย่างแบบละเอียด เช่น:
+### 2. Real-Time Keystroke Audit Logs
+Every keystroke will output detailed matching telemetry:
 ```text
 [NST Shortcut Triggered] command='editor.find' keybinding='Ctrl+F' scope='editor' (hardware code='KeyF', printed key='ด')
 ```
-หรือหากปุ่มไม่ทำงาน Console จะบอกเหตุผลทันที:
-* `[NST Shortcut Suppressed in Input]` ➔ คีย์ลัดถูกระงับเพราะผู้ใช้กำลังพิมพ์อยู่ใน Textbox
-* `[NST Shortcut Guard Failed]` ➔ ฟังก์ชัน `when()` คืนค่า `false` ทำให้คำสั่งไม่ทำงาน
-* `[NST Shortcut Unmatched]` ➔ ไม่มีคำสั่งใดที่ผูกไว้กับคีย์หรือ Scope ปัจจุบัน
+If a shortcut does not trigger, the console logs the exact failure cause:
+* `[NST Shortcut Suppressed in Input]` ➔ Suppressed because the active element is an input/textarea.
+* `[NST Shortcut Guard Failed]` ➔ Command's `when()` guard condition returned `false`.
+* `[NST Shortcut Unmatched]` ➔ No command registered for the physical key combination in the active scope.
 
-### 3. ตรวจสอบและทดสอบคำสั่งทั้งหมดในระบบ
+### 3. Inspect Registered Commands
 ```js
-// ดูรายการคำสั่งและคีย์ลัดทั้งหมดที่กำลังทำงานอยู่
+// Inspect all registered commands and their scopes in a formatted table
 console.table(__NST_COMMANDS__.getAll());
 
-// บังคับรันคำสั่งโดยตรงเพื่อทดสอบว่าฟังก์ชันทำงานปกติหรือไม่
+// Programmatically invoke any command to test execution logic in isolation
 __NST_COMMANDS__.execute("file.open-game");
 ```
 
 ---
 
-## 4. ตารางรูปแบบคีย์ลัดที่รองรับ (Keybinding Syntax)
+## 4. Keybinding Syntax Reference
 
-| รูปแบบ | ตัวอย่าง | คำอธิบาย |
+| Category | Syntax Examples | Description |
 |---|---|---|
-| Modifiers | `Ctrl+...`, `Shift+...`, `Alt+...`, `Cmd+...` | รองรับทั้งปุ่มซ้ายและขวา |
-| ตัวอักษรเดี่ยว | `Ctrl+O`, `Ctrl+Shift+O`, `Ctrl+F` | อิงพิกัดฮาร์ดแวร์สากล ไม่ขึ้นกับภาษาที่พิมพ์ |
-| ปุ่มฟังก์ชัน | `F1`, `F2`, `F12` | คีย์ลัดฟังก์ชัน |
-| ปุ่มพิเศษ | `Enter`, `Escape`, `Tab`, `Space`, `Backspace` | รองรับ NumpadEnter ด้วย |
-| เครื่องหมาย | `Ctrl+,`, `Ctrl+.`, `Ctrl+/`, `Ctrl+-` | ปุ่มเครื่องหมายวรรคตอน |
+| Modifiers | `Ctrl+...`, `Shift+...`, `Alt+...`, `Cmd+...` | Case-insensitive; normalizes `Ctrl` and `Cmd`/`Meta`. |
+| Letters | `Ctrl+O`, `Ctrl+Shift+O`, `Ctrl+F` | Matches physical hardware key coordinates independently of OS input layout. |
+| Function Keys | `F1`, `F2`, ..., `F12` | Standard function keys. |
+| Special Keys | `Enter`, `Escape`, `Tab`, `Space`, `Backspace` | Handles both standard and Numpad equivalents (e.g. `NumpadEnter`). |
+| Punctuation | `Ctrl+,`, `Ctrl+.`, `Ctrl+/`, `Ctrl+-` | Punctuation keys mapped by physical key coordinate. |
 
 ---
 
-## 5. Automated CI Audit
-ทุกครั้งที่มีการรัน:
+## 5. Automated CI Audit Enforcement
+
+Run the automated architecture audit:
 ```bash
 npm run check:ui
 ```
-ระบบจะสแกนโค้ดทั้งโปรเจกต์ด้วย AST หากมีใครเผลอเขียน `addEventListener("keydown")` จะแจ้งเตือน Category: **`9. Keyboard Shortcut Governance (@/commands)`** ทันที
+The AST scanner traverses the entire codebase. Any ad-hoc `addEventListener("keydown")` call outside `src/lib/commands/` will immediately trigger a CI failure under Category **`9. Keyboard Shortcut Governance (@/commands)`** (`FORBIDDEN_KEYDOWN_LISTENER`).

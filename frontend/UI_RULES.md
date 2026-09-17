@@ -1,25 +1,25 @@
 # UI Rules & Architecture Governance
 
 > **NST Frontend UI & Architecture Standard**  
-> บังคับใช้มาตรฐาน UI และโครงสร้างสถาปัตยกรรมเดียวกันทั้งโปรเจกต์ (React 18 + Vite + Wails Desktop + `@/ui` Design System) ป้องกัน library รั่วไหล และควบคุม Theme ด้วย Semantic Tokens
+> Enforces unified UI standards, architectural boundaries, and design system governance across the entire project (React 18 + Vite + Wails Desktop + `@/ui` Design System). Prevents library sprawl, enforces token-based theming, and ensures long-term codebase maintainability.
 
 ---
 
-## 1. กฎเหล็ก 12 ข้อ (Core UI Rules)
+## 1. Core UI Rules (The 13 Commandments)
 
-1. **ใช้ Design System ผ่าน Gateway `@/ui` เสมอ**
-2. **ห้ามติดตั้ง UI Component Library อื่น** โดยไม่ได้รับอนุมัติ (ห้าม MUI, Chakra, Ant Design, Mantine, Bootstrap ฯลฯ)
-3. **ห้ามสร้าง Button, Dialog, Input, Badge ใหม่เอง** ต้องใช้ตัวที่มีใน Design System (`@/ui`)
-4. **ห้ามใช้ Native UI Element** (`<button>`, `<input>`, `<textarea>`, `<select>`) หากมี Component ใน Design System รองรับ (กรณีจำเป็นอย่างยิ่ง ให้ใช้ comment `// @ui-allow-native` กำกับ)
-5. **ห้าม import Radix Primitive หรือ 3rd-party UI โดยตรง** ใน Application code (อนุญาตเฉพาะภายใน `src/ui/`)
-6. **ห้ามใช้ Inline Style** (`style={{ ... }}`) สำหรับ layout หรือ color ให้ใช้ Tailwind Utility Classes เสมอ
-7. **ห้ามใช้ Arbitrary Colors** เช่น `text-[#3399ff]`, `bg-[#1a1a1a]`, `border-[#2e2e2e]` ใน Application code
-8. **สีต้องมาจาก Semantic Design Tokens** (เช่น `bg-background`, `bg-card`, `bg-primary`, `text-foreground`, `text-muted-foreground`, `border-border`)
-9. **ห้าม Deep Import** UI primitives จาก `src/components/ui/*` ให้ import ผ่าน `@/ui` เท่านั้น
-10. **ใช้ `lucide-react` เป็น Icon Library มาตรฐานเดียวทั้งระบบ** ห้ามติดตั้งหรือ import icon libraries อื่นซ้ำซ้อน
-11. **ใช้ `sonner` เป็น Notification & Toast มาตรฐาน** (`import { toast } from "sonner"`)
-12. **Unidirectional Dependency Flow**: โค้ดระดับล่าง (UI Primitives) ต้องไม่เรียกโค้ดระดับบน (Pages, Dialogs)
-13. **ใช้ระบบ Universal Command & Keybinding System (`@/lib/commands`) เสมอ**: ห้ามเขียน `addEventListener('keydown', ...)` เองใน Component (ดูข้อกำหนดฉบับเต็มใน [KEYBINDING_RULES.md](file:///home/jop/work/NST-V2/frontend/KEYBINDING_RULES.md))
+1. **Always Consume the Design System via `@/ui` Gateway**: All UI primitives must be imported from `@/ui`.
+2. **Forbidden 3rd-Party UI Component Libraries**: Installing unauthorized UI component libraries (MUI, Chakra, Ant Design, Mantine, Bootstrap, etc.) is strictly prohibited.
+3. **No Reinventing Primitives**: Never hand-craft custom Button, Dialog, Input, Badge, or Progress components. Use the official Design System components (`@/ui`).
+4. **No Raw HTML Native Form Elements**: Avoid `<button>`, `<input>`, `<textarea>`, and `<select>` when corresponding Design System components exist. (In rare exceptions, tag with `// @ui-allow-native`).
+5. **No Direct Radix Primitive Imports**: Application code must never directly import `@radix-ui/*` packages. All Radix primitives must be wrapped and exported through `src/ui/`.
+6. **No Inline Styles for Layout or Theming**: Do not use `style={{ ... }}` for layout or colors. Use Tailwind utility classes.
+7. **No Arbitrary Hex Colors**: Hardcoded colors such as `text-[#3399ff]`, `bg-[#1a1a1a]`, or `border-[#2e2e2e]` in application code are strictly forbidden.
+8. **All Colors Must Derive from Semantic Design Tokens**: Use semantic tokens (e.g. `bg-background`, `bg-card`, `bg-primary`, `text-foreground`, `text-muted-foreground`, `border-border`).
+9. **No Deep Imports from `ui` Subdirectories**: Do not import from `src/components/ui/*`. All imports must pass through the `@/ui` gateway.
+10. **Lucide React as the Single Icon Standard**: `lucide-react` is the only approved icon library. Do not import or install competing icon packs.
+11. **Sonner as the Notification & Toast Standard**: All toasts and notifications must use `sonner` (`import { toast } from "sonner"`).
+12. **Unidirectional Dependency Flow**: Lower layers (UI Primitives) must never import from higher layers (Pages, Dialogs).
+13. **Universal Command & Keybinding Standard (`@/lib/commands`)**: Never attach ad-hoc `addEventListener('keydown', ...)` listeners in components. All shortcuts must be managed through the central command registry (see [KEYBINDING_RULES.md](file:///home/jop/work/NST-V2/frontend/KEYBINDING_RULES.md)).
 
 ---
 
@@ -43,11 +43,11 @@ frontend/src/
 │   ├── index.ts             (Public export gate)
 │   ├── button.tsx, dialog.tsx, input.tsx, badge.tsx, progress.tsx, ...
 │
-├── lib/                     ← Utilities, helpers, providers
+├── lib/                     ← Utilities, helpers, providers, command registry
 └── index.css                ← Global styles, Tailwind v4 @theme, tokens
 ```
 
-### ทิศทางการ Import (Unidirectional Dependency Flow)
+### Unidirectional Dependency Flow
 
 ```text
 src/pages (Layer 4)
@@ -59,28 +59,28 @@ src/components/layout (Layer 2)
 src/ui (Layer 1 - Design System)
 ```
 
-* **`src/pages` (Layer 4)**: นำเข้า `dialogs`, `layout`, `ui`, `lib`
-* **`src/components/dialogs` (Layer 3)**: นำเข้า `layout`, `ui`, `lib` (**ห้ามเรียกข้ามไปยัง `pages`**)
-* **`src/components/layout` (Layer 2)**: นำเข้า `ui`, `lib` (**ห้ามเรียก `dialogs` หรือ `pages`**)
-* **`src/ui` (Layer 1)**: ฐานล่างสุดของ Design System (**ห้ามเรียก `dialogs`, `layout`, หรือ `pages`**)
+* **`src/pages` (Layer 4)**: May import `dialogs`, `layout`, `ui`, and `lib`.
+* **`src/components/dialogs` (Layer 3)**: May import `layout`, `ui`, and `lib` (**Forbidden to import from `pages`**).
+* **`src/components/layout` (Layer 2)**: May import `ui` and `lib` (**Forbidden to import from `dialogs` or `pages`**).
+* **`src/ui` (Layer 1)**: Base foundation of the Design System (**Forbidden to import from `dialogs`, `layout`, or `pages`**).
 
 ---
 
-## 3. การ Import ผ่าน "ประตูเดียว" (`@/ui`)
+## 3. Single Gateway Import Pattern (`@/ui`)
 
-ทุก Application code ต้องนำเข้า Base UI Component ผ่าน `@/ui` เท่านั้น:
+All application code must import Base UI Components exclusively via `@/ui`:
 
-### ❌ ห้ามเขียน (Forbidden)
+### ❌ Forbidden
 ```tsx
-// ห้าม deep import ทีละไฟล์
+// Forbidden: Deep importing individual files
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-// ห้าม import Radix หรือ 3rd-party UI library โดยตรง
+// Forbidden: Direct Radix or 3rd-party UI imports in application code
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 ```
 
-### ✅ ต้องเขียน (Required)
+### ✅ Required
 ```tsx
 import { Button, Dialog, Input, Badge, Progress, DropdownMenu } from "@/ui";
 ```
@@ -89,48 +89,51 @@ import { Button, Dialog, Input, Badge, Progress, DropdownMenu } from "@/ui";
 
 ## 4. Semantic Design Token Reference
 
-| สิ่งที่พบบ่อย (❌ หลีกเลี่ยง) | Semantic Token ที่ถูกต้อง (✅ ควรใช้) |
-|---|---|
-| `bg-[#1a1a1a]` | `bg-background` |
-| `bg-[#242424]`, `bg-[#222222]` | `bg-card`, `bg-popover` |
-| `text-[#f0f0f0]`, `text-white` | `text-foreground` |
-| `text-[#3399ff]`, `bg-[#3399ff]` | `text-primary`, `bg-primary` |
-| `text-[#888888]`, `text-[#777777]`, `text-[#a0a0a0]` | `text-muted-foreground` |
-| `border-[#333333]`, `border-[#2e2e2e]` | `border-border` |
-| `border-[#3a3a3a]`, `bg-[#2c2c2c]` | `border-input`, `bg-muted` |
-| `text-rose-400`, `bg-rose-600` | `text-destructive`, `bg-destructive` |
+| Prohibited Pattern (❌) | Approved Semantic Token (✅) | Purpose |
+|---|---|---|
+| `bg-[#1a1a1a]` | `bg-background` | Base application background |
+| `bg-[#242424]`, `bg-[#222222]` | `bg-card`, `bg-popover` | Card and dropdown surfaces |
+| `text-[#f0f0f0]`, `text-white` | `text-foreground` | Primary text |
+| `text-[#3399ff]`, `bg-[#3399ff]` | `text-primary`, `bg-primary` | Brand interactive focus & accents |
+| `text-[#888888]`, `text-[#a0a0a0]` | `text-muted-foreground` | Secondary/muted labels and icons |
+| `border-[#333333]`, `border-[#2e2e2e]` | `border-border` | Component and divider borders |
+| `border-[#3a3a3a]`, `bg-[#2c2c2c]` | `border-input`, `bg-muted` | Input borders and muted containers |
+| `text-rose-400`, `bg-rose-600` | `text-destructive`, `bg-destructive` | Errors and destructive actions |
 
 ---
 
-## 5. การตรวจสอบด้วยสคริปต์อัตโนมัติ (Automated Check)
+## 5. Automated Architectural Audit Scripts
 
-โปรเจกต์มีสคริปต์สำหรับ Audit สถาปัตยกรรมและ Design Tokens อัตโนมัติ:
+The repository includes automated AST static analysis scripts to verify architecture compliance and token discipline:
 
-### ตรวจสอบภาพรวม (Summary Report)
+### Summary Report
 ```bash
 bun run audit:ui -- --summary
-# หรือ
+# or
 npm run audit:ui -- --summary
 ```
 
-### ตรวจสอบอย่างละเอียด (Full Report พร้อมตำแหน่งไฟล์และวิธีแก้)
+### Full Detailed Report (with file locations and remediation steps)
 ```bash
 npm run audit:ui
 ```
 
-### กรองดูเฉพาะหมวดหมู่
+### Filter by Violation Category
 ```bash
-# ตรวจสอบการใช้สีแบบ Arbitrary Hex
+# Check arbitrary hex color usage
 npm run audit:ui -- --category=ARBITRARY_COLOR
 
-# ตรวจสอบการ Deep Import
+# Check deep imports from ui/
 npm run audit:ui -- --category=DEEP_UI_IMPORT
 
-# ตรวจสอบการใช้ native button/input
+# Check raw native button/input usage
 npm run audit:ui -- --category=NATIVE_ELEMENT
+
+# Check keyboard shortcut violations
+npm run audit:ui -- --category=FORBIDDEN_KEYDOWN_LISTENER
 ```
 
-### โหมด CI Enforcement (เข้มงวด - มี Error จะสั่ง exit code 1)
+### Strict CI Enforcement (Exit code 1 on errors)
 ```bash
 npm run check:ui
 ```
