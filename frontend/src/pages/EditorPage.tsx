@@ -5,6 +5,7 @@ import {
 import { TranslationStatus, type TextEntry } from "@bindings/nst-go/pkg/model";
 import type { FileSummary } from "@bindings/nst-go/pkg/storage";
 import { Button, Input, TokenizedText } from "@/ui";
+import { useCommands, useActiveScope } from "@/lib/commands";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
 import {
@@ -68,18 +69,24 @@ export const EditorPage: React.FC<EditorPageProps> = ({
     return () => clearTimeout(handler);
   }, [searchQuery]);
 
-  // Keyboard shortcut: Ctrl+F to focus search
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
-        e.preventDefault();
+  // Set active command scope to 'editor'
+  useActiveScope("editor");
+
+  // Register editor-specific commands
+  useCommands([
+    {
+      id: "editor.find",
+      title: "Find in Current File",
+      category: "Editor",
+      keybinding: "Ctrl+F",
+      scope: "editor",
+      preventInInput: false,
+      run: () => {
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+      },
+    },
+  ]);
 
   // Load files list
   const loadFiles = useCallback(async () => {
@@ -551,9 +558,9 @@ export const EditorPage: React.FC<EditorPageProps> = ({
                           onChange={(e) => setEditValue(e.target.value)}
                           onBlur={() => commitEdit(entry.id, editValue)}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
+                            if ((e.key === "Enter" || e.code === "Enter" || e.code === "NumpadEnter") && !e.shiftKey) {
                               commitEdit(entry.id, editValue);
-                            } else if (e.key === "Escape") {
+                            } else if (e.key === "Escape" || e.code === "Escape") {
                               cancelEdit();
                             }
                           }}
@@ -694,7 +701,7 @@ export const EditorPage: React.FC<EditorPageProps> = ({
                     setEditValue(e.target.value);
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                    if ((e.ctrlKey || e.metaKey) && (e.key === "Enter" || e.code === "Enter" || e.code === "NumpadEnter")) {
                       e.preventDefault();
                       commitEdit(activeEntry.id, editValue);
                       // Advance to next row

@@ -16,7 +16,8 @@ export type ViolationType =
   | 'ARBITRARY_COLOR'
   | 'NON_TOKEN_COLOR'
   | 'ROGUE_UI_LIBRARY'
-  | 'FORBIDDEN_DEPENDENCY';
+  | 'FORBIDDEN_DEPENDENCY'
+  | 'FORBIDDEN_KEYDOWN_LISTENER';
 
 export type Severity = 'ERROR' | 'WARNING' | 'INFO';
 
@@ -290,6 +291,31 @@ export function auditSourceFile(
       }
     }
 
+    // 4. Check Call Expressions for forbidden ad-hoc keydown listeners
+    if (ts.isCallExpression(node)) {
+      const exprText = node.expression.getText(sourceFile);
+      if (exprText.endsWith('addEventListener') && node.arguments.length >= 2) {
+        const firstArg = node.arguments[0];
+        if (ts.isStringLiteral(firstArg) && firstArg.text.toLowerCase() === 'keydown') {
+          const normRel = relPath.replace(/\\/g, '/');
+          if (!normRel.startsWith('src/lib/commands/')) {
+            const { line } = getLineCol(node.getStart());
+            const lineContent = lines[line - 1] || '';
+            violations.push({
+              file: relPath,
+              line,
+              type: 'FORBIDDEN_KEYDOWN_LISTENER',
+              severity: 'ERROR',
+              layer,
+              message: `Forbidden ad-hoc 'keydown' event listener detected.`,
+              snippet: lineContent.trim(),
+              recommendation: `Use useCommands() or useCommandRegistry() from '@/lib/commands' for centralized, universal physical key handling.`,
+            });
+          }
+        }
+      }
+    }
+
     ts.forEachChild(node, visit);
   }
 
@@ -420,6 +446,7 @@ export async function runUiAudit(options: {
     NON_TOKEN_COLOR: 0,
     ROGUE_UI_LIBRARY: 0,
     FORBIDDEN_DEPENDENCY: 0,
+    FORBIDDEN_KEYDOWN_LISTENER: 0,
   };
 
   const countsBySeverity: Record<Severity, number> = {
@@ -445,6 +472,7 @@ export async function runUiAudit(options: {
   console.log(`│ 6. Non-Token Palette Colors                   │ ${String(countsByType.NON_TOKEN_COLOR).padEnd(10)} │ \x1b[36mINFO\x1b[0m      │`);
   console.log(`│ 7. Rogue UI Libraries                         │ ${String(countsByType.ROGUE_UI_LIBRARY).padEnd(10)} │ \x1b[31mERROR\x1b[0m     │`);
   console.log(`│ 8. Package.json Dependencies                  │ ${String(countsByType.FORBIDDEN_DEPENDENCY).padEnd(10)} │ \x1b[31mERROR\x1b[0m     │`);
+  console.log(`│ 9. Keyboard Shortcut Governance (@/commands)  │ ${String(countsByType.FORBIDDEN_KEYDOWN_LISTENER).padEnd(10)} │ \x1b[31mERROR\x1b[0m     │`);
   console.log('└───────────────────────────────────────────────┴────────────┴───────────┘');
   console.log(`\nTotals: \x1b[31m${countsBySeverity.ERROR} Errors\x1b[0m | \x1b[33m${countsBySeverity.WARNING} Warnings\x1b[0m | \x1b[36m${countsBySeverity.INFO} Info\x1b[0m\n`);
 

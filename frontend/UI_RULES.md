@@ -19,6 +19,7 @@
 10. **ใช้ `lucide-react` เป็น Icon Library มาตรฐานเดียวทั้งระบบ** ห้ามติดตั้งหรือ import icon libraries อื่นซ้ำซ้อน
 11. **ใช้ `sonner` เป็น Notification & Toast มาตรฐาน** (`import { toast } from "sonner"`)
 12. **Unidirectional Dependency Flow**: โค้ดระดับล่าง (UI Primitives) ต้องไม่เรียกโค้ดระดับบน (Pages, Dialogs)
+13. **ใช้ระบบ Universal Command & Keybinding System (`@/lib/commands`) เสมอ**: ห้ามเขียน `addEventListener('keydown', ...)` เองใน Component (ดูข้อกำหนดฉบับเต็มใน [KEYBINDING_RULES.md](file:///home/jop/work/NST-V2/frontend/KEYBINDING_RULES.md))
 
 ---
 

@@ -18,6 +18,7 @@ import { PublishDialog } from "@/components/dialogs/PublishDialog";
 import { SettingsDialog } from "@/components/dialogs/SettingsDialog";
 import { AboutDialog } from "@/components/dialogs/AboutDialog";
 import { Toaster, toast } from "sonner";
+import { CommandProvider, useCommands } from "@/lib/commands";
 
 function AppContent() {
   const navigate = useNavigate();
@@ -95,6 +96,81 @@ function AppContent() {
       toast.error(`Failed to close project: ${err?.message || err}`);
     }
   };
+
+  // Register global shortcuts across the application
+  useCommands(
+    [
+      {
+        id: "file.open-game",
+        title: "Open Game Folder",
+        category: "File",
+        keybinding: "Ctrl+O",
+        run: () => setOpenGameDialog(true),
+      },
+      {
+        id: "file.open-workspace",
+        title: "Open Workspace File (.nst)",
+        category: "File",
+        keybinding: "Ctrl+Shift+O",
+        run: handleBrowseWorkspace,
+      },
+      {
+        id: "file.close-project",
+        title: "Close Project",
+        category: "File",
+        keybinding: "Ctrl+W",
+        when: () => currentProject !== null,
+        preventInInput: true,
+        run: handleCloseProject,
+      },
+      {
+        id: "app.settings",
+        title: "Settings",
+        category: "Preferences",
+        keybinding: "Ctrl+,",
+        run: () => setSettingsDialog(true),
+      },
+      {
+        id: "translate.open",
+        title: "AI Translate",
+        category: "Translation",
+        keybinding: "Ctrl+T",
+        when: () => currentProject !== null,
+        run: () => setTranslateDialog(true),
+      },
+      {
+        id: "deploy.open",
+        title: "Deploy Mod",
+        category: "Export",
+        keybinding: "Ctrl+D",
+        when: () => currentProject !== null,
+        run: () => setDeployDialog(true),
+      },
+      {
+        id: "merge.open",
+        title: "Update Version / Merge",
+        category: "Project",
+        keybinding: "Ctrl+M",
+        run: () => setMergeDialog(true),
+      },
+      {
+        id: "publish.open",
+        title: "Publish to Chanomhub",
+        category: "Publish",
+        keybinding: "Ctrl+P",
+        when: () => currentProject !== null,
+        run: () => setPublishDialog(true),
+      },
+      {
+        id: "app.about",
+        title: "About NST",
+        category: "Help",
+        keybinding: "F1",
+        run: () => setAboutDialog(true),
+      },
+    ],
+    [currentProject]
+  );
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-background text-foreground">
@@ -202,7 +278,9 @@ function AppContent() {
 export function App() {
   return (
     <HashRouter>
-      <AppContent />
+      <CommandProvider>
+        <AppContent />
+      </CommandProvider>
     </HashRouter>
   );
 }
