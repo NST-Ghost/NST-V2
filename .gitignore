@@ -48,4 +48,6 @@ providers/*.json
 
 # Research and local datasets
 research/
+mock_game/
+
 
