@@ -5,9 +5,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+  Button,
+  Input,
+} from "@/ui";
 import {
   DeployService,
   ProjectService,
@@ -66,18 +66,18 @@ export const UpdateVersionDialog: React.FC<UpdateVersionDialogProps> = ({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <GitMerge className="w-5 h-5 text-[#3399ff]" />
+            <GitMerge className="w-5 h-5 text-primary" />
             Smart Merge: Update Game Version
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2 text-sm">
-          <p className="text-xs text-[#999999] leading-relaxed">
+          <p className="text-xs text-muted-foreground leading-relaxed">
             Reconciles your current translations with an updated version of the game (e.g. v1.0 → v1.1). Exact matches and fuzzy line relocations are automatically preserved.
           </p>
 
           <div>
-            <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">
               New/Updated Game Folder
             </label>
             <div className="flex gap-2">
@@ -103,33 +103,33 @@ export const UpdateVersionDialog: React.FC<UpdateVersionDialogProps> = ({
 
           {/* Merge Results Table */}
           {stats && (
-            <div className="border border-[#383838] bg-[#1d1d1d] p-3.5 rounded-md space-y-2">
+            <div className="border border-border bg-card/60 p-3.5 rounded-md space-y-2">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
                 <CheckCircle2 className="w-4 h-4" />
                 Merge Summary Statistics
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-                <div className="bg-[#242424] p-2 rounded border border-[#333333]">
-                  <span className="text-[#888888] block">Total In Incoming Version</span>
-                  <span className="font-mono text-base font-bold text-white">
+                <div className="bg-card p-2 rounded border border-border">
+                  <span className="text-muted-foreground block">Total In Incoming Version</span>
+                  <span className="font-mono text-base font-bold text-foreground">
                     {stats.total_new}
                   </span>
                 </div>
-                <div className="bg-[#242424] p-2 rounded border border-[#333333]">
-                  <span className="text-[#888888] block">Exact Preserved</span>
+                <div className="bg-card p-2 rounded border border-border">
+                  <span className="text-muted-foreground block">Exact Preserved</span>
                   <span className="font-mono text-base font-bold text-emerald-400">
                     {stats.exact_matches}
                   </span>
                 </div>
-                <div className="bg-[#242424] p-2 rounded border border-[#333333]">
-                  <span className="text-[#888888] block">Fuzzy Preserved</span>
-                  <span className="font-mono text-base font-bold text-[#3399ff]">
+                <div className="bg-card p-2 rounded border border-border">
+                  <span className="text-muted-foreground block">Fuzzy Preserved</span>
+                  <span className="font-mono text-base font-bold text-primary">
                     {stats.fuzzy_matches}
                   </span>
                 </div>
-                <div className="bg-[#242424] p-2 rounded border border-[#333333]">
-                  <span className="text-[#888888] block">New Lines To Translate</span>
+                <div className="bg-card p-2 rounded border border-border">
+                  <span className="text-muted-foreground block">New Lines To Translate</span>
                   <span className="font-mono text-base font-bold text-amber-400">
                     {stats.new_untranslated}
                   </span>

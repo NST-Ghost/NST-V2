@@ -1,6 +1,5 @@
 import React from "react";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { Badge, Progress } from "@/ui";
 import type { Project } from "@bindings/nst-go/pkg/model";
 import type { WorkspaceStats } from "@bindings/nst-go/pkg/storage";
 
@@ -13,25 +12,25 @@ export const Statusbar: React.FC<StatusbarProps> = ({ project, stats }) => {
   const percent = stats?.percent || 0;
 
   return (
-    <div className="h-6 bg-[#1f1f1f] border-t border-[#333333] flex items-center justify-between px-3 text-[11px] text-[#909090] select-none z-40">
+    <div className="h-6 bg-card border-t border-border flex items-center justify-between px-3 text-[11px] text-muted-foreground select-none z-40">
       {/* Left items: Project name & Engine */}
       <div className="flex items-center gap-2 truncate">
         {project ? (
           <>
-            <span className="font-semibold text-white truncate max-w-[200px]">
+            <span className="font-semibold text-foreground truncate max-w-[200px]">
               {project.name || "Untitled Project"}
             </span>
-            <span className="text-[#555555]">·</span>
+            <span className="text-muted-foreground/60">·</span>
             <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 uppercase">
               {project.engine || "Engine"}
             </Badge>
-            <span className="text-[#555555]">·</span>
-            <span className="text-[#c0c0c0]">
+            <span className="text-muted-foreground/60">·</span>
+            <span className="text-muted-foreground">
               {project.source_lang || "Source"} → {project.target_lang || "Target"}
             </span>
           </>
         ) : (
-          <span className="italic text-[#666666]">No project open</span>
+          <span className="italic text-muted-foreground/70">No project open</span>
         )}
       </div>
 
@@ -42,11 +41,11 @@ export const Statusbar: React.FC<StatusbarProps> = ({ project, stats }) => {
             <span className="text-emerald-400 font-medium">
               {stats.translated.toLocaleString()}
             </span>
-            <span className="text-[#555555]">/</span>
-            <span className="text-white">
+            <span className="text-muted-foreground/60">/</span>
+            <span className="text-foreground">
               {stats.total.toLocaleString()}
             </span>
-            <span className="text-[#777777] ml-1">
+            <span className="text-muted-foreground ml-1">
               ({percent.toFixed(1)}%)
             </span>
           </div>

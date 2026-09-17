@@ -4,9 +4,7 @@ import {
 } from "@bindings/nst-go/cmd/nst-desktop";
 import { TranslationStatus, type TextEntry } from "@bindings/nst-go/pkg/model";
 import type { FileSummary } from "@bindings/nst-go/pkg/storage";
-import { TokenizedText } from "@/components/ui/tokenized-text";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Button, Input, TokenizedText } from "@/ui";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { toast } from "sonner";
 import {
@@ -16,6 +14,7 @@ import {
   ChevronRight,
   Sparkles,
   Rocket,
+  Loader2,
 } from "lucide-react";
 
 interface EditorPageProps {
@@ -38,6 +37,8 @@ export const EditorPage: React.FC<EditorPageProps> = ({
   const [fileFilterSearch, setFileFilterSearch] = useState("");
   const [leftPanelWidth, setLeftPanelWidth] = useState(240);
   const [isResizingLeft, setIsResizingLeft] = useState(false);
+  const [bottomPanelHeight, setBottomPanelHeight] = useState(190);
+  const [isResizingBottom, setIsResizingBottom] = useState(false);
 
   // 2. Query filter state
   const [statusFilter, setStatusFilter] = useState<"all" | "untranslated" | "translated">("all");
@@ -215,6 +216,30 @@ export const EditorPage: React.FC<EditorPageProps> = ({
     };
   }, [isResizingLeft]);
 
+  // Bottom panel vertical resizer mouse listener
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const newHeight = window.innerHeight - e.clientY;
+      if (newHeight >= 110 && newHeight <= 500) {
+        setBottomPanelHeight(newHeight);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingBottom(false);
+    };
+
+    if (isResizingBottom) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizingBottom]);
+
   // Filtered files list
   const filteredFiles = files.filter((f) =>
     f.path.toLowerCase().includes(fileFilterSearch.toLowerCase())
@@ -224,17 +249,17 @@ export const EditorPage: React.FC<EditorPageProps> = ({
   const translatedAllFiles = files.reduce((acc, f) => acc + f.translated, 0);
 
   return (
-    <div className="flex-1 flex flex-row overflow-hidden bg-[#1a1a1a]">
+    <div className="flex-1 flex flex-row overflow-hidden bg-background">
       {/* 1. Left Panel: File List */}
       <div
         style={{ width: `${leftPanelWidth}px` }}
-        className="shrink-0 bg-[#202020] border-r border-[#303030] flex flex-col select-none relative"
+        className="shrink-0 bg-card border-r border-border flex flex-col select-none relative"
       >
         {/* Panel Header */}
-        <div className="p-2 border-b border-[#303030] space-y-1.5">
+        <div className="p-2 border-b border-border space-y-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-white flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-[#3399ff]" />
+            <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-primary" />
               Files ({files.length})
             </span>
           </div>
@@ -242,12 +267,12 @@ export const EditorPage: React.FC<EditorPageProps> = ({
             value={fileFilterSearch}
             onChange={(e) => setFileFilterSearch(e.target.value)}
             placeholder="Filter files…"
-            className="h-6 text-xs px-2 bg-[#1a1a1a]"
+            className="h-6 text-xs px-2 bg-background"
           />
         </div>
 
         {/* File items list */}
-        <div className="flex-1 overflow-y-auto divide-y divide-[#282828] text-xs">
+        <div className="flex-1 overflow-y-auto divide-y divide-border text-xs">
           {/* All Files item */}
           <div
             onClick={() => {
@@ -256,12 +281,12 @@ export const EditorPage: React.FC<EditorPageProps> = ({
             }}
             className={`px-3 py-2 cursor-pointer flex items-center justify-between transition-colors ${
               selectedFile === "all" || !selectedFile
-                ? "bg-[#3399ff]/20 text-[#70baff] font-semibold"
-                : "text-[#d0d0d0] hover:bg-[#282828]"
+                ? "bg-primary/20 text-primary font-semibold"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
             }`}
           >
             <span className="truncate">All Files</span>
-            <span className="font-mono text-[10px] text-[#888888]">
+            <span className="font-mono text-[10px] text-muted-foreground">
               {translatedAllFiles}/{totalAllFiles}
             </span>
           </div>
@@ -278,21 +303,21 @@ export const EditorPage: React.FC<EditorPageProps> = ({
                 }}
                 className={`px-3 py-2 cursor-pointer flex flex-col gap-1 transition-colors ${
                   isSelected
-                    ? "bg-[#3399ff]/20 text-[#70baff] font-semibold"
-                    : "text-[#d0d0d0] hover:bg-[#282828]"
+                    ? "bg-primary/20 text-primary font-semibold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 }`}
               >
                 <div className="flex items-center justify-between gap-1">
                   <span className="truncate" title={f.path}>
                     {f.path}
                   </span>
-                  <span className="font-mono text-[10px] text-[#888888] shrink-0">
+                  <span className="font-mono text-[10px] text-muted-foreground shrink-0">
                     {f.translated}/{f.total}
                   </span>
                 </div>
-                <div className="w-full bg-[#181818] h-1 rounded-full overflow-hidden">
+                <div className="w-full bg-muted h-1 rounded-full overflow-hidden">
                   <div
-                    className="bg-[#3399ff] h-full transition-all"
+                    className="bg-primary h-full transition-all"
                     style={{ width: `${pct}%` }}
                   />
                 </div>
@@ -304,16 +329,17 @@ export const EditorPage: React.FC<EditorPageProps> = ({
         {/* Resizer Handle */}
         <div
           onMouseDown={() => setIsResizingLeft(true)}
-          className="absolute right-0 top-0 bottom-0 w-1 hover:w-1.5 cursor-col-resize hover:bg-[#3399ff] transition-all z-10"
+          className="absolute right-0 top-0 bottom-0 w-1 hover:w-1.5 cursor-col-resize hover:bg-primary transition-all z-10"
         />
       </div>
 
       {/* 2. Main Grid & Detail Pane */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
-        <div className="h-10 bg-[#222222] border-b border-[#303030] px-3 flex items-center justify-between gap-2 text-xs shrink-0 select-none">
+        <div className="h-10 bg-card border-b border-border px-3 flex items-center justify-between gap-2 text-xs shrink-0 select-none">
           {/* Status Filter Buttons */}
-          <div className="flex items-center gap-1 bg-[#1a1a1a] p-0.5 rounded-md border border-[#333333]">
+          <div className="flex items-center gap-1 bg-background p-0.5 rounded-md border border-border">
+            {/* @ui-allow-native */}
             <button
               onClick={() => {
                 setStatusFilter("all");
@@ -321,12 +347,13 @@ export const EditorPage: React.FC<EditorPageProps> = ({
               }}
               className={`px-2 py-0.5 rounded text-xs transition-colors cursor-pointer ${
                 statusFilter === "all"
-                  ? "bg-[#3399ff] text-white font-medium"
-                  : "text-[#888888] hover:text-white"
+                  ? "bg-primary text-primary-foreground font-medium"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               All
             </button>
+            {/* @ui-allow-native */}
             <button
               onClick={() => {
                 setStatusFilter("untranslated");
@@ -334,12 +361,13 @@ export const EditorPage: React.FC<EditorPageProps> = ({
               }}
               className={`px-2 py-0.5 rounded text-xs transition-colors cursor-pointer ${
                 statusFilter === "untranslated"
-                  ? "bg-rose-600 text-white font-medium"
-                  : "text-[#888888] hover:text-white"
+                  ? "bg-destructive text-destructive-foreground font-medium"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               Untranslated
             </button>
+            {/* @ui-allow-native */}
             <button
               onClick={() => {
                 setStatusFilter("translated");
@@ -348,7 +376,7 @@ export const EditorPage: React.FC<EditorPageProps> = ({
               className={`px-2 py-0.5 rounded text-xs transition-colors cursor-pointer ${
                 statusFilter === "translated"
                   ? "bg-emerald-600 text-white font-medium"
-                  : "text-[#888888] hover:text-white"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               Translated
@@ -357,18 +385,19 @@ export const EditorPage: React.FC<EditorPageProps> = ({
 
           {/* Search Input */}
           <div className="flex-1 max-w-sm relative">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-[#777777]" />
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-muted-foreground" />
             <Input
               ref={searchInputRef}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search source or translation… (Ctrl+F)"
-              className="h-7 pl-8 pr-7 text-xs bg-[#1a1a1a]"
+              className="h-7 pl-8 pr-7 text-xs bg-background"
             />
             {searchQuery && (
+              // @ui-allow-native
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute right-2 top-1.5 text-xs text-[#777777] hover:text-white"
+                className="absolute right-2 top-1.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
               >
                 ✕
               </button>
@@ -383,7 +412,7 @@ export const EditorPage: React.FC<EditorPageProps> = ({
               onClick={onOpenTranslate}
               className="h-7 text-xs gap-1"
             >
-              <Sparkles className="w-3 h-3 text-[#3399ff]" />
+              <Sparkles className="w-3 h-3 text-primary" />
               AI Translate…
             </Button>
             <Button
@@ -401,10 +430,10 @@ export const EditorPage: React.FC<EditorPageProps> = ({
         {/* Virtualized Table Grid */}
         <div
           ref={parentRef}
-          className="flex-1 overflow-auto bg-[#181818] relative"
+          className="flex-1 overflow-auto bg-background relative"
         >
           {/* Header Row */}
-          <div className="sticky top-0 z-20 bg-[#222222] border-b border-[#333333] flex text-xs font-semibold text-[#888888] select-none h-7 items-center">
+          <div className="sticky top-0 z-20 bg-card border-b border-border flex text-xs font-semibold text-muted-foreground select-none h-7 items-center">
             <div className="w-9 px-2 text-center">#</div>
             <div className="w-48 px-2 truncate">File & Key</div>
             <div className="flex-1 px-3 truncate">Original Source</div>
@@ -412,11 +441,12 @@ export const EditorPage: React.FC<EditorPageProps> = ({
           </div>
 
           {loading ? (
-            <div className="p-8 text-center text-xs text-[#777777]">
-              Loading entries…
+            <div className="p-8 text-center text-xs text-muted-foreground flex flex-col items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              <span>Loading entries…</span>
             </div>
           ) : entries.length === 0 ? (
-            <div className="p-8 text-center text-xs text-[#777777]">
+            <div className="p-8 text-center text-xs text-muted-foreground">
               No entries match the current filter or search.
             </div>
           ) : (
@@ -448,19 +478,19 @@ export const EditorPage: React.FC<EditorPageProps> = ({
                       height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
                     }}
-                    className={`flex items-center text-xs border-b border-[#242424] cursor-pointer transition-colors ${
+                    className={`flex items-center text-xs border-b border-border/50 cursor-pointer transition-colors ${
                       isSelected
-                        ? "bg-[#283747] text-white"
+                        ? "bg-primary/20 text-foreground"
                         : virtualRow.index % 2 === 0
-                        ? "bg-[#1c1c1c] text-[#d8d8d8] hover:bg-[#252525]"
-                        : "bg-[#181818] text-[#d8d8d8] hover:bg-[#252525]"
+                        ? "bg-card/40 text-foreground hover:bg-muted"
+                        : "bg-background text-foreground hover:bg-muted"
                     }`}
                   >
                     {/* Status Dot */}
                     <div className="w-9 px-2 flex items-center justify-center">
                       <span
                         className={`w-2 h-2 rounded-full ${
-                          isTranslated ? "bg-emerald-400" : "bg-rose-500"
+                          isTranslated ? "bg-emerald-400" : "bg-destructive"
                         }`}
                         title={isTranslated ? "Translated" : "Untranslated"}
                       />
@@ -468,11 +498,11 @@ export const EditorPage: React.FC<EditorPageProps> = ({
 
                     {/* Key / File path */}
                     <div
-                      className="w-48 px-2 font-mono text-[11px] text-[#808080] truncate"
+                      className="w-48 px-2 font-mono text-[11px] text-muted-foreground truncate"
                       title={`${entry.file_path} :: ${entry.key_path}`}
                     >
-                      <span className="text-[#a0a0a0]">{entry.file_path}</span>
-                      <span className="text-[#555555]"> : </span>
+                      <span className="text-foreground/80">{entry.file_path}</span>
+                      <span className="text-muted-foreground/60"> : </span>
                       <span>{entry.key_path}</span>
                     </div>
 
@@ -487,6 +517,7 @@ export const EditorPage: React.FC<EditorPageProps> = ({
                     {/* Target Translation (Inline editable) */}
                     <div className="flex-1 px-3 truncate">
                       {isEditing ? (
+                        // @ui-allow-native
                         <input
                           autoFocus
                           value={editValue}
@@ -499,14 +530,14 @@ export const EditorPage: React.FC<EditorPageProps> = ({
                               cancelEdit();
                             }
                           }}
-                          className="w-full bg-[#111111] text-white px-1.5 py-0.5 rounded border border-[#3399ff] focus:outline-none font-mono text-xs"
+                          className="w-full bg-background text-foreground px-1.5 py-0.5 rounded border border-primary focus:outline-none font-mono text-xs"
                         />
                       ) : (
                         <span
                           className={
                             (entry.target ?? "").trim()
                               ? "text-emerald-300 font-mono text-xs"
-                              : "text-[#555555] italic text-xs"
+                              : "text-muted-foreground/60 italic text-xs"
                           }
                         >
                           {(entry.target ?? "").trim() ? (
@@ -528,7 +559,7 @@ export const EditorPage: React.FC<EditorPageProps> = ({
         </div>
 
         {/* Pagination Bar */}
-        <div className="h-7 bg-[#202020] border-t border-[#303030] px-3 flex items-center justify-between text-[11px] text-[#888888] select-none shrink-0">
+        <div className="h-7 bg-card border-t border-border px-3 flex items-center justify-between text-[11px] text-muted-foreground select-none shrink-0">
           <span>
             Showing {Math.min(totalCount, page * pageSize + 1)}–
             {Math.min(totalCount, (page + 1) * pageSize)} of{" "}
@@ -541,12 +572,12 @@ export const EditorPage: React.FC<EditorPageProps> = ({
               size="sm"
               disabled={page === 0}
               onClick={() => setPage((p) => Math.max(0, p - 1))}
-              className="h-5 px-1.5 text-xs text-[#a0a0a0] disabled:opacity-30"
+              className="h-5 px-1.5 text-xs text-muted-foreground disabled:opacity-30"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
               Previous
             </Button>
-            <span className="font-mono text-white">
+            <span className="font-mono text-foreground">
               Page {page + 1} of {Math.max(1, Math.ceil(totalCount / pageSize))}
             </span>
             <Button
@@ -554,7 +585,7 @@ export const EditorPage: React.FC<EditorPageProps> = ({
               size="sm"
               disabled={(page + 1) * pageSize >= totalCount}
               onClick={() => setPage((p) => p + 1)}
-              className="h-5 px-1.5 text-xs text-[#a0a0a0] disabled:opacity-30"
+              className="h-5 px-1.5 text-xs text-muted-foreground disabled:opacity-30"
             >
               Next
               <ChevronRight className="w-3.5 h-3.5" />
@@ -562,21 +593,30 @@ export const EditorPage: React.FC<EditorPageProps> = ({
           </div>
         </div>
 
+        {/* Resizer Handle for Detail Panel */}
+        <div
+          onMouseDown={() => setIsResizingBottom(true)}
+          className="h-1 -mt-0.5 hover:h-1.5 cursor-row-resize hover:bg-primary transition-all z-20 shrink-0"
+        />
+
         {/* 3. Bottom Detail Panel */}
-        <div className="h-44 bg-[#202020] border-t border-[#303030] flex flex-col shrink-0 p-3 select-none">
-          <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-[#2c2c2c] text-xs">
-            <span className="font-semibold text-white flex items-center gap-2">
+        <div
+          style={{ height: `${bottomPanelHeight}px` }}
+          className="bg-card border-t border-border flex flex-col shrink-0 p-3 select-none relative"
+        >
+          <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-border text-xs">
+            <span className="font-semibold text-foreground flex items-center gap-2">
               <span>Selected Entry Detail</span>
               {activeEntry && (
-                <span className="font-mono text-[11px] text-[#888888] font-normal">
+                <span className="font-mono text-[11px] text-muted-foreground font-normal">
                   {activeEntry.file_path} :: {activeEntry.key_path}
                 </span>
               )}
             </span>
 
             {activeEntry && (
-              <span className="text-[11px] text-[#777777]">
-                Press <kbd className="px-1 py-0.5 bg-[#2a2a2a] rounded text-white">Ctrl+Enter</kbd> to save & advance
+              <span className="text-[11px] text-muted-foreground">
+                Press <kbd className="px-1 py-0.5 bg-muted border border-border rounded text-foreground">Ctrl+Enter</kbd> to save & advance
               </span>
             )}
           </div>
@@ -584,8 +624,8 @@ export const EditorPage: React.FC<EditorPageProps> = ({
           {activeEntry ? (
             <div className="flex-1 grid grid-cols-2 gap-3 overflow-hidden text-xs">
               {/* Source Box */}
-              <div className="flex flex-col bg-[#181818] border border-[#303030] rounded p-2 overflow-y-auto">
-                <span className="text-[10px] uppercase font-bold text-[#3399ff] mb-1">
+              <div className="flex flex-col bg-background border border-border rounded p-2 overflow-y-auto">
+                <span className="text-[10px] uppercase font-bold text-primary mb-1">
                   Source (Original)
                 </span>
                 <div className="flex-1 select-text">
@@ -597,12 +637,12 @@ export const EditorPage: React.FC<EditorPageProps> = ({
               </div>
 
               {/* Target Box (Interactive Textarea) */}
-              <div className="flex flex-col bg-[#181818] border border-[#303030] rounded p-2">
+              <div className="flex flex-col bg-background border border-border rounded p-2">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] uppercase font-bold text-emerald-400">
                     Target (Translation)
                   </span>
-                  <span className="text-[10px] text-[#666666]">
+                  <span className="text-[10px] text-muted-foreground">
                     Status: {activeEntry.status}
                   </span>
                 </div>
@@ -632,12 +672,12 @@ export const EditorPage: React.FC<EditorPageProps> = ({
                     }
                   }}
                   placeholder="Type translated text here…"
-                  className="flex-1 bg-transparent text-white font-mono text-xs resize-none focus:outline-none"
+                  className="flex-1 bg-transparent text-foreground font-mono text-xs resize-none focus:outline-none placeholder:text-muted-foreground/50"
                 />
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-xs text-[#666666] italic">
+            <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground/70 italic">
               Select a row in the grid above to view and edit its translation
             </div>
           )}

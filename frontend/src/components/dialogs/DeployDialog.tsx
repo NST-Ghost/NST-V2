@@ -5,10 +5,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+  Button,
+  Input,
+  Badge,
+} from "@/ui";
 import {
   DeployService,
   ProjectService,
@@ -84,7 +84,7 @@ export const DeployDialog: React.FC<DeployDialogProps> = ({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <Rocket className="w-5 h-5 text-[#3399ff]" />
+            <Rocket className="w-5 h-5 text-primary" />
             Deploy Translations to Game
           </DialogTitle>
         </DialogHeader>
@@ -92,7 +92,7 @@ export const DeployDialog: React.FC<DeployDialogProps> = ({
         <div className="space-y-4 py-2 text-sm">
           {/* Deployment Mode Selection */}
           <div className="space-y-2">
-            <label className="block text-xs font-semibold text-[#a0a0a0]">
+            <label className="block text-xs font-semibold text-muted-foreground">
               Deployment Method
             </label>
 
@@ -101,20 +101,20 @@ export const DeployDialog: React.FC<DeployDialogProps> = ({
               onClick={() => isRPGM && setMode("layer")}
               className={`p-3 rounded-md border transition-all cursor-pointer ${
                 mode === "layer"
-                  ? "border-[#3399ff] bg-[#3399ff]/10"
-                  : "border-[#3a3a3a] bg-[#242424] hover:bg-[#282828]"
+                  ? "border-primary bg-primary/10"
+                  : "border-border bg-card hover:bg-muted"
               } ${!isRPGM ? "opacity-40 cursor-not-allowed" : ""}`}
             >
               <div className="flex items-center justify-between mb-1">
-                <span className="font-semibold text-xs text-white">
+                <span className="font-semibold text-xs text-foreground">
                   Non-Destructive JS Plugin Layer (Drop-in)
                 </span>
                 <Badge variant={isRPGM ? "default" : "secondary"}>
                   RPG Maker MV/MZ
                 </Badge>
               </div>
-              <p className="text-[11px] text-[#909090]">
-                Zero file overwrite. Installs <code className="text-[#3399ff]">NST_TranslationLayer.js</code> and loads translations on the fly.
+              <p className="text-[11px] text-muted-foreground">
+                Zero file overwrite. Installs <code className="text-primary font-mono">NST_TranslationLayer.js</code> and loads translations on the fly.
               </p>
             </div>
 
@@ -123,17 +123,17 @@ export const DeployDialog: React.FC<DeployDialogProps> = ({
               onClick={() => setMode("copy")}
               className={`p-3 rounded-md border transition-all cursor-pointer ${
                 mode === "copy"
-                  ? "border-[#3399ff] bg-[#3399ff]/10"
-                  : "border-[#3a3a3a] bg-[#242424] hover:bg-[#282828]"
+                  ? "border-primary bg-primary/10"
+                  : "border-border bg-card hover:bg-muted"
               }`}
             >
               <div className="flex items-center justify-between mb-1">
-                <span className="font-semibold text-xs text-white">
+                <span className="font-semibold text-xs text-foreground">
                   Export Copy (Patched Game Folder)
                 </span>
                 <Badge variant="outline">All Engines</Badge>
               </div>
-              <p className="text-[11px] text-[#909090]">
+              <p className="text-[11px] text-muted-foreground">
                 Clones game assets and patches translated strings directly into a new target folder.
               </p>
             </div>
@@ -142,7 +142,7 @@ export const DeployDialog: React.FC<DeployDialogProps> = ({
           {/* Destination path for copy mode */}
           {mode === "copy" && (
             <div>
-              <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">
                 Destination Folder
               </label>
               <div className="flex gap-2">
@@ -166,7 +166,7 @@ export const DeployDialog: React.FC<DeployDialogProps> = ({
 
           {/* Language display name */}
           <div>
-            <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">
               Language Display Name
             </label>
             <Input

@@ -5,9 +5,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+  Button,
+  Input,
+} from "@/ui";
 import { SettingsService } from "@bindings/nst-go/cmd/nst-desktop";
 import type { Settings } from "@bindings/nst-go/cmd/nst-desktop";
 import { toast } from "sonner";
@@ -114,17 +114,23 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
   };
 
   const handleRefreshPlugins = async () => {
-    setIsRefreshingPlugins(true);
-    await loadProvidersData();
-    setIsRefreshingPlugins(false);
-    toast.success("Discovered provider plugins reloaded");
+    try {
+      setIsRefreshingPlugins(true);
+      const list = await fetchProviders();
+      setProviders(list);
+      toast.success(`Discovered ${list.length} translation providers`);
+    } catch (err: any) {
+      toast.error(`Plugin reload failed: ${err?.message || err}`);
+    } finally {
+      setIsRefreshingPlugins(false);
+    }
   };
 
   const handleSave = async () => {
     try {
       setSaving(true);
       await SettingsService.SaveSettings(settings);
-      toast.success("Settings saved successfully");
+      toast.success("Settings saved successfully!");
       onOpenChange(false);
     } catch (err: any) {
       toast.error(`Failed to save settings: ${err?.message || err}`);
@@ -151,31 +157,32 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl h-[560px] p-0 flex flex-col overflow-hidden bg-[#181818] border-[#333333]">
-        <DialogHeader className="p-4 pb-3 border-b border-[#2b2b2b]">
-          <DialogTitle className="flex items-center gap-2 text-base text-[#f0f0f0]">
-            <SettingsIcon className="w-5 h-5 text-[#3399ff]" />
+      <DialogContent className="max-w-3xl h-[560px] p-0 flex flex-col overflow-hidden bg-background border-border">
+        <DialogHeader className="p-4 pb-3 border-b border-border">
+          <DialogTitle className="flex items-center gap-2 text-base text-foreground">
+            <SettingsIcon className="w-5 h-5 text-primary" />
             Preferences & Settings
           </DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-1 overflow-hidden">
           {/* Left Sidebar */}
-          <div className="w-48 bg-[#141414] border-r border-[#2b2b2b] p-2 space-y-1">
+          <div className="w-48 bg-card/60 border-r border-border p-2 space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
               return (
+                // @ui-allow-native
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-colors text-left ${
                     isActive
-                      ? "bg-[#252525] text-white font-semibold border-l-2 border-[#3399ff]"
-                      : "text-[#888888] hover:text-[#cccccc] hover:bg-[#1d1d1d]"
+                      ? "bg-secondary text-foreground font-semibold border-l-2 border-primary"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? "text-[#3399ff]" : "text-[#777777]"}`} />
+                  <Icon className={`w-4 h-4 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
                   {item.label}
                 </button>
               );
@@ -183,20 +190,20 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           </div>
 
           {/* Right Content Area */}
-          <div className="flex-1 p-5 overflow-y-auto bg-[#1b1b1b] text-sm text-[#e0e0e0]">
+          <div className="flex-1 p-5 overflow-y-auto bg-background text-sm text-foreground">
             {/* 1. Providers Tab */}
             {activeTab === "providers" && (
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-sm font-semibold text-white">Translation Providers</h3>
-                  <p className="text-xs text-[#888888] mt-0.5">
+                  <h3 className="text-sm font-semibold text-foreground">Translation Providers</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Select default translation module and custom endpoint routes.
                   </p>
                 </div>
 
                 <div className="space-y-3 pt-2">
                   <div>
-                    <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Active Default Provider
                     </label>
                     <select
@@ -210,7 +217,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                           default_model: found?.default_model || (found?.available_models?.[0] || settings.default_model),
                         });
                       }}
-                      className="w-full h-9 rounded-md border border-[#3a3a3a] bg-[#222222] px-3 text-sm text-[#f0f0f0] focus:outline-none focus:border-[#3399ff]"
+                      className="w-full h-9 rounded-md border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:border-primary"
                     >
                       {providers.map((p) => (
                         <option key={p.name} value={p.name}>
@@ -222,28 +229,28 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
                   {/* Provider Info Card */}
                   {activeProviderInfo && (
-                    <div className="p-3 bg-[#222222] border border-[#2e2e2e] rounded-md space-y-1.5 text-xs">
+                    <div className="p-3 bg-card border border-border rounded-md space-y-1.5 text-xs">
                       <div className="flex justify-between items-center">
-                        <span className="font-semibold text-white">
+                        <span className="font-semibold text-foreground">
                           {activeProviderInfo.display_name}
                         </span>
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                             activeProviderInfo.is_custom
-                              ? "bg-[#3e2723] text-[#ffb74d]"
-                              : "bg-[#1e3a5f] text-[#3399ff]"
+                              ? "bg-amber-950/60 text-amber-400"
+                              : "bg-primary/20 text-primary"
                           }`}
                         >
                           {activeProviderInfo.is_custom ? "PLUGIN DRIVER" : "BUILT-IN"}
                         </span>
                       </div>
-                      <p className="text-[#888888] text-[11px]">
+                      <p className="text-muted-foreground text-[11px]">
                         {activeProviderInfo.description || "Declarative translation driver."}
                       </p>
                       {activeProviderInfo.base_url && (
-                        <div className="text-[11px] text-[#777] flex items-center gap-1 font-mono">
+                        <div className="text-[11px] text-muted-foreground flex items-center gap-1 font-mono">
                           <span>Endpoint:</span>
-                          <code className="text-[#a0a0a0]">{activeProviderInfo.base_url}</code>
+                          <code className="text-foreground">{activeProviderInfo.base_url}</code>
                         </div>
                       )}
                     </div>
@@ -252,7 +259,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                   {/* Custom Base URL (if openai or custom plugin) */}
                   {(activeProviderInfo?.is_custom || settings.default_provider === "openai") && (
                     <div>
-                      <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
                         Endpoint Base URL Override (Optional)
                       </label>
                       <Input
@@ -280,15 +287,15 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             {activeTab === "models" && (
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-sm font-semibold text-white">Model Selection</h3>
-                  <p className="text-xs text-[#888888] mt-0.5">
+                  <h3 className="text-sm font-semibold text-foreground">Model Selection</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Configure preferred AI model for {activeProviderInfo?.display_name || settings.default_provider}.
                   </p>
                 </div>
 
                 <div className="space-y-3 pt-2">
                   <div>
-                    <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+                    <label className="block text-xs font-semibold text-muted-foreground mb-1">
                       Default Model String
                     </label>
                     <Input
@@ -303,19 +310,20 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                   {/* Dynamic Model Suggestions from Provider/Plugin definition */}
                   {activeProviderInfo?.available_models && activeProviderInfo.available_models.length > 0 && (
                     <div className="space-y-2 pt-2">
-                      <label className="block text-xs font-semibold text-[#a0a0a0]">
+                      <label className="block text-xs font-semibold text-muted-foreground">
                         Available Models from {activeProviderInfo.display_name}:
                       </label>
                       <div className="flex flex-wrap gap-2">
                         {activeProviderInfo.available_models.map((m) => (
+                          // @ui-allow-native
                           <button
                             key={m}
                             type="button"
                             onClick={() => setSettings({ ...settings, default_model: m })}
                             className={`px-2.5 py-1 rounded text-xs border transition-colors ${
                               settings.default_model === m
-                                ? "bg-[#1a8cff]/20 border-[#3399ff] text-[#3399ff] font-semibold"
-                                : "bg-[#222222] border-[#333333] text-[#cccccc] hover:border-[#555555]"
+                                ? "bg-primary/20 border-primary text-primary font-semibold"
+                                : "bg-card border-border text-foreground hover:border-border/80 hover:bg-muted"
                             }`}
                           >
                             {m}
@@ -332,8 +340,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             {activeTab === "keys" && (
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-sm font-semibold text-white">API Keys & Authentication</h3>
-                  <p className="text-xs text-[#888888] mt-0.5">
+                  <h3 className="text-sm font-semibold text-foreground">API Keys & Authentication</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Credentials are saved securely in your local user config.
                   </p>
                 </div>
@@ -341,12 +349,12 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 <div className="space-y-4 pt-2">
                   {/* Built-in Providers */}
                   <div className="space-y-3">
-                    <div className="text-xs font-semibold text-[#3399ff] uppercase tracking-wider">
+                    <div className="text-xs font-semibold text-primary uppercase tracking-wider">
                       Core Drivers
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
                         Google Gemini API Key
                       </label>
                       <div className="flex gap-2">
@@ -371,7 +379,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
                         OpenAI API Key (or Local LLM)
                       </label>
                       <div className="flex gap-2">
@@ -396,7 +404,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
                         Google Translate API Key (Optional)
                       </label>
                       <div className="flex gap-2">
@@ -421,7 +429,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
                         Chanomhub Token (Publishing)
                       </label>
                       <div className="flex gap-2">
@@ -448,19 +456,19 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
                   {/* Dynamic External Plugin Credentials */}
                   {customPlugins.length > 0 && (
-                    <div className="border-t border-[#2e2e2e] pt-3 space-y-3">
-                      <div className="text-xs font-semibold text-[#ffb74d] uppercase tracking-wider flex items-center gap-1.5">
+                    <div className="border-t border-border pt-3 space-y-3">
+                      <div className="text-xs font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
                         <Layers className="w-3.5 h-3.5" />
                         External Plugins ({customPlugins.length})
                       </div>
 
                       {customPlugins.map((plugin) => (
-                        <div key={plugin.name} className="p-3 bg-[#202020] border border-[#2e2e2e] rounded-md space-y-2">
+                        <div key={plugin.name} className="p-3 bg-card border border-border rounded-md space-y-2">
                           <div className="flex justify-between items-center">
-                            <label className="block text-xs font-semibold text-white">
+                            <label className="block text-xs font-semibold text-foreground">
                               {plugin.display_name} API Key
                             </label>
-                            <span className="text-[10px] text-[#ffb74d] font-mono">
+                            <span className="text-[10px] text-amber-400 font-mono">
                               plugin: {plugin.name}
                             </span>
                           </div>
@@ -486,9 +494,9 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                             </Button>
                           </div>
                           {plugin.base_url && (
-                            <div className="text-[11px] text-[#777] flex items-center gap-1">
+                            <div className="text-[11px] text-muted-foreground flex items-center gap-1">
                               <span>Default Endpoint:</span>
-                              <code className="text-[#a0a0a0] bg-[#161616] px-1 py-0.5 rounded">{plugin.base_url}</code>
+                              <code className="text-foreground bg-muted px-1 py-0.5 rounded">{plugin.base_url}</code>
                             </div>
                           )}
                         </div>
@@ -504,8 +512,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
               <div className="space-y-4">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-sm font-semibold text-white">External Provider Plugins</h3>
-                    <p className="text-xs text-[#888888] mt-0.5">
+                    <h3 className="text-sm font-semibold text-foreground">External Provider Plugins</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Auto-discovered declarative plugins from <code>providers/</code> and <code>~/.config/nst/providers/</code>.
                     </p>
                   </div>
@@ -523,36 +531,36 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
                 <div className="space-y-2 pt-1">
                   {customPlugins.length === 0 ? (
-                    <div className="p-4 bg-[#202020] border border-[#2e2e2e] rounded-md text-xs text-[#888888] text-center">
+                    <div className="p-4 bg-card border border-border rounded-md text-xs text-muted-foreground text-center">
                       No external JSON plugins currently detected.
                     </div>
                   ) : (
                     customPlugins.map((cp) => (
-                      <div key={cp.name} className="p-3 bg-[#222222] border border-[#2e2e2e] rounded-md space-y-1.5">
+                      <div key={cp.name} className="p-3 bg-card border border-border rounded-md space-y-1.5">
                         <div className="flex justify-between items-center">
                           <div>
-                            <span className="font-semibold text-xs text-white">{cp.display_name}</span>
-                            <span className="ml-2 text-[10px] text-[#888888] font-mono">({cp.name})</span>
+                            <span className="font-semibold text-xs text-foreground">{cp.display_name}</span>
+                            <span className="ml-2 text-[10px] text-muted-foreground font-mono">({cp.name})</span>
                           </div>
-                          <span className="px-2 py-0.5 text-[10px] font-bold bg-[#3e2723] text-[#ffb74d] rounded">
+                          <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-950/60 text-amber-400 rounded">
                             REGISTERED
                           </span>
                         </div>
-                        <p className="text-[11px] text-[#999]">
+                        <p className="text-[11px] text-muted-foreground">
                           {cp.description || "Declarative external provider"}
                         </p>
-                        <div className="flex flex-wrap gap-2 text-[11px] text-[#777] pt-1">
+                        <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground pt-1">
                           {cp.base_url && (
-                            <div>Endpoint: <code className="text-[#bbb]">{cp.base_url}</code></div>
+                            <div>Endpoint: <code className="text-foreground">{cp.base_url}</code></div>
                           )}
                           {cp.default_model && (
-                            <div>Default: <code className="text-[#3399ff]">{cp.default_model}</code></div>
+                            <div>Default: <code className="text-primary font-mono">{cp.default_model}</code></div>
                           )}
                         </div>
                         {cp.available_models && cp.available_models.length > 0 && (
                           <div className="flex flex-wrap gap-1 pt-1">
                             {cp.available_models.map((m) => (
-                              <span key={m} className="px-1.5 py-0.5 rounded text-[10px] bg-[#1a1a1a] text-[#aaa] border border-[#333]">
+                              <span key={m} className="px-1.5 py-0.5 rounded text-[10px] bg-background text-muted-foreground border border-border">
                                 {m}
                               </span>
                             ))}
@@ -563,7 +571,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                   )}
                 </div>
 
-                <div className="text-xs text-[#777] bg-[#141414] p-3 rounded border border-[#2a2a2a] mt-3">
+                <div className="text-xs text-muted-foreground bg-card/60 p-3 rounded border border-border mt-3">
                   💡 Drop any new <code>.json</code> provider definition in <code>providers/</code> or <code>~/.config/nst/providers/</code> to expand translation models dynamically without rebuilding the app.
                 </div>
               </div>
@@ -573,8 +581,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             {activeTab === "translation" && (
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-sm font-semibold text-white">Translation Pipeline Defaults</h3>
-                  <p className="text-xs text-[#888888] mt-0.5">
+                  <h3 className="text-sm font-semibold text-foreground">Translation Pipeline Defaults</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Configure default languages, batch sizing, and concurrency.
                   </p>
                 </div>
@@ -582,7 +590,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                 <div className="space-y-3 pt-2">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
                         Default Source Language
                       </label>
                       <Input
@@ -593,7 +601,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
                         Default Target Language
                       </label>
                       <Input
@@ -607,7 +615,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
                         Batch Size (lines per request)
                       </label>
                       <Input
@@ -624,7 +632,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+                      <label className="block text-xs font-semibold text-muted-foreground mb-1">
                         Concurrency (workers)
                       </label>
                       <Input
@@ -648,23 +656,23 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
             {/* 6. About Tab */}
             {activeTab === "about" && (
               <div className="space-y-4">
-                <div className="flex items-center gap-3 border-b border-[#2b2b2b] pb-4">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#1a8cff] to-[#0055b3] flex items-center justify-center font-bold text-xl text-white shadow-lg">
+                <div className="flex items-center gap-3 border-b border-border pb-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center font-bold text-xl text-primary-foreground shadow-lg">
                     NST
                   </div>
                   <div>
-                    <h2 className="font-bold text-base text-white">NST Ghost - Novelty Translation Tool</h2>
-                    <p className="text-xs text-[#888888]">Version {__APP_VERSION__} (Go Edition)</p>
+                    <h2 className="font-bold text-base text-foreground">NST Ghost - Novelty Translation Tool</h2>
+                    <p className="text-xs text-muted-foreground">Version {__APP_VERSION__} (Go Edition)</p>
                   </div>
                 </div>
 
-                <div className="space-y-2 text-xs text-[#a0a0a0] leading-relaxed">
+                <div className="space-y-2 text-xs text-muted-foreground leading-relaxed">
                   <p>
                     Modern, high-performance visual novel and game translation suite.
                     Designed for fast scanning, parallel AI translation pipelines, and zero-dependency packaging.
                   </p>
-                  <div className="p-3 bg-[#222222] rounded-md border border-[#2e2e2e] space-y-1">
-                    <div className="text-white font-semibold">Engine Features:</div>
+                  <div className="p-3 bg-card rounded-md border border-border space-y-1">
+                    <div className="text-foreground font-semibold">Engine Features:</div>
                     <div>• Supported Engines: RPG Maker (MV/MZ), Tyrano, Wolf RPG, BGI / Ethornell, Ren&apos;Py</div>
                     <div>• AI Architecture: Parallel chunk batching with context preservation & glossary injection</div>
                     <div>• Plugin System: External JSON provider drivers with OpenAI-compatible routing</div>
@@ -675,14 +683,14 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({
           </div>
         </div>
 
-        <DialogFooter className="p-3 bg-[#141414] border-t border-[#2b2b2b] flex justify-end gap-2">
+        <DialogFooter className="p-3 bg-card/60 border-t border-border flex justify-end gap-2">
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
             onClick={handleSave}
             disabled={saving}
-            className="gap-1.5 bg-[#1a8cff] hover:bg-[#0073e6] text-white"
+            className="gap-1.5"
           >
             <Save className="w-4 h-4" />
             {saving ? "Saving..." : "Save Settings"}

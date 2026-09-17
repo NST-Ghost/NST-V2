@@ -5,9 +5,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+  Button,
+  Input,
+} from "@/ui";
 import {
   DeployService,
   SettingsService,
@@ -73,18 +73,18 @@ export const PublishDialog: React.FC<PublishDialogProps> = ({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <Share2 className="w-5 h-5 text-[#3399ff]" />
+            <Share2 className="w-5 h-5 text-primary" />
             Publish Mod to Chanomhub
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-2 text-sm">
-          <p className="text-xs text-[#909090]">
-            Automatically packages <code className="text-[#3399ff]">nst_translations/</code> into a zip archive and uploads it directly to Chanomhub mod moderation.
+          <p className="text-xs text-muted-foreground">
+            Automatically packages <code className="text-primary font-mono">nst_translations/</code> into a zip archive and uploads it directly to Chanomhub mod moderation.
           </p>
 
           <div>
-            <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">
               Chanomhub Game Article Slug
             </label>
             <Input
@@ -96,7 +96,7 @@ export const PublishDialog: React.FC<PublishDialogProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">
               API Token (JWT)
             </label>
             <Input
@@ -109,7 +109,7 @@ export const PublishDialog: React.FC<PublishDialogProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">
               Language Tag
             </label>
             <Input
@@ -125,7 +125,7 @@ export const PublishDialog: React.FC<PublishDialogProps> = ({
               <span className="font-semibold text-emerald-400 block">
                 {result.message}
               </span>
-              <div className="text-[#a0a0a0]">
+              <div className="text-muted-foreground">
                 Archive Size: {(result.file_size_bytes / 1024).toFixed(1)} KB
               </div>
               {result.download_url && (
@@ -133,7 +133,7 @@ export const PublishDialog: React.FC<PublishDialogProps> = ({
                   href={result.download_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-[#3399ff] hover:underline pt-1"
+                  className="inline-flex items-center gap-1 text-primary hover:underline pt-1"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   View Uploaded File

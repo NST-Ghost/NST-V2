@@ -5,10 +5,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+  Button,
+  Input,
+  Badge,
+} from "@/ui";
 import { ProjectService } from "@bindings/nst-go/cmd/nst-desktop";
 import { toast } from "sonner";
 import { FolderOpen, Sparkles, Loader2 } from "lucide-react";
@@ -87,7 +87,7 @@ export const OpenGameDialog: React.FC<OpenGameDialogProps> = ({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <Sparkles className="w-5 h-5 text-[#3399ff]" />
+            <Sparkles className="w-5 h-5 text-primary" />
             Extract New Game Project
           </DialogTitle>
         </DialogHeader>
@@ -95,7 +95,7 @@ export const OpenGameDialog: React.FC<OpenGameDialogProps> = ({
         <div className="space-y-4 py-2 text-sm">
           {/* Game Folder Selection */}
           <div>
-            <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">
               Game Root Directory
             </label>
             <div className="flex gap-2">
@@ -117,7 +117,7 @@ export const OpenGameDialog: React.FC<OpenGameDialogProps> = ({
             </div>
             {detectedEngine && (
               <div className="mt-1.5 flex items-center gap-2">
-                <span className="text-xs text-[#888888]">Detected Engine:</span>
+                <span className="text-xs text-muted-foreground">Detected Engine:</span>
                 <Badge variant={detectedEngine === "unknown" ? "warning" : "default"}>
                   {detectedEngine.toUpperCase()}
                 </Badge>
@@ -127,7 +127,7 @@ export const OpenGameDialog: React.FC<OpenGameDialogProps> = ({
 
           {/* Workspace Destination */}
           <div>
-            <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">
               Save Workspace File (.nst)
             </label>
             <div className="flex gap-2">
@@ -152,7 +152,7 @@ export const OpenGameDialog: React.FC<OpenGameDialogProps> = ({
           {/* Languages */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">
                 Source Language
               </label>
               <Input
@@ -161,7 +161,7 @@ export const OpenGameDialog: React.FC<OpenGameDialogProps> = ({
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">
                 Target Language
               </label>
               <Input

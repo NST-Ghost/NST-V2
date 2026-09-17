@@ -5,10 +5,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
+  Button,
+  Input,
+  Progress,
+} from "@/ui";
 import {
   TranslationService,
   SettingsService,
@@ -200,7 +200,7 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <Languages className="w-5 h-5 text-[#3399ff]" />
+            <Languages className="w-5 h-5 text-primary" />
             AI Translation Pipeline
           </DialogTitle>
         </DialogHeader>
@@ -209,14 +209,14 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
           {/* Dynamic Provider Selection */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">
                 Translation Service
               </label>
               <select
                 value={provider}
                 onChange={(e) => handleProviderChange(e.target.value)}
                 disabled={isRunning}
-                className="w-full h-8 rounded-md border border-[#3a3a3a] bg-[#222222] px-2 text-sm text-[#f0f0f0] focus:outline-none focus:border-[#3399ff] disabled:opacity-50"
+                className="w-full h-8 rounded-md border border-input bg-card px-2 text-sm text-foreground focus:outline-none focus:border-primary disabled:opacity-50"
               >
                 {providers.map((p) => (
                   <option key={p.name} value={p.name}>
@@ -226,7 +226,7 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">
                 Model Name
               </label>
               <Input
@@ -249,7 +249,7 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
           {/* API Key (for non-mock providers) */}
           {provider !== "mock" && (
             <div>
-              <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">
                 API Key {currentProviderInfo?.is_custom ? `(${currentProviderInfo.display_name})` : ""}
               </label>
               <Input
@@ -265,7 +265,7 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
           {/* Base URL (if custom plugin or openai) */}
           {(currentProviderInfo?.is_custom || provider === "openai") && (
             <div>
-              <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">
                 Base URL {currentProviderInfo?.is_custom ? "(Plugin Endpoint)" : "(Custom Endpoint)"}
               </label>
               <Input
@@ -279,41 +279,44 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
 
           {/* Scope */}
           <div>
-            <label className="block text-xs font-semibold text-[#a0a0a0] mb-1.5">
+            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
               Translation Scope
             </label>
             <div className="flex gap-2">
-              <label className="flex items-center gap-1.5 text-xs text-[#d0d0d0] cursor-pointer">
+              <label className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer">
+                {/* @ui-allow-native */}
                 <input
                   type="radio"
                   name="scope"
                   checked={scope === "untranslated"}
                   onChange={() => setScope("untranslated")}
                   disabled={isRunning}
-                  className="accent-[#3399ff]"
+                  className="accent-primary"
                 />
                 Untranslated Only
               </label>
-              <label className="flex items-center gap-1.5 text-xs text-[#d0d0d0] cursor-pointer">
+              <label className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer">
+                {/* @ui-allow-native */}
                 <input
                   type="radio"
                   name="scope"
                   checked={scope === "all"}
                   onChange={() => setScope("all")}
                   disabled={isRunning}
-                  className="accent-[#3399ff]"
+                  className="accent-primary"
                 />
                 All Text (Overwrite)
               </label>
               {currentFile && (
-                <label className="flex items-center gap-1.5 text-xs text-[#d0d0d0] cursor-pointer">
+                <label className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer">
+                  {/* @ui-allow-native */}
                   <input
                     type="radio"
                     name="scope"
                     checked={scope === "file"}
                     onChange={() => setScope("file")}
                     disabled={isRunning}
-                    className="accent-[#3399ff]"
+                    className="accent-primary"
                   />
                   Current File ({currentFile})
                 </label>
@@ -324,7 +327,7 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
           {/* Batch Size & Concurrency */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">
                 Batch Size (lines)
               </label>
               <Input
@@ -337,7 +340,7 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#a0a0a0] mb-1">
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">
                 Concurrency (workers)
               </label>
               <Input
@@ -352,20 +355,20 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
           </div>
 
           {/* Languages info indicator */}
-          <div className="flex items-center justify-between text-xs text-[#808080] bg-[#1a1a1a] p-2 rounded-md border border-[#2a2a2a]">
+          <div className="flex items-center justify-between text-xs text-muted-foreground bg-background p-2 rounded-md border border-border">
             <span>
-              Source: <strong className="text-[#c0c0c0]">{sourceLang}</strong>
+              Source: <strong className="text-foreground">{sourceLang}</strong>
             </span>
             <span>➔</span>
             <span>
-              Target: <strong className="text-[#3399ff]">{targetLang}</strong>
+              Target: <strong className="text-primary">{targetLang}</strong>
             </span>
           </div>
 
           {/* Progress Tracker */}
           {isRunning && (
-            <div className="space-y-2 border-t border-[#333333] pt-3">
-              <div className="flex justify-between text-xs text-[#a0a0a0]">
+            <div className="space-y-2 border-t border-border pt-3">
+              <div className="flex justify-between text-xs text-muted-foreground">
                 <span>
                   Translated: {progress ? progress.completed : 0} /{" "}
                   {progress ? progress.total : 0}
@@ -377,8 +380,8 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
               <Progress
                 value={progress ? progress.percent : 0}
               />
-              <div className="text-[11px] text-[#707070] truncate flex items-center gap-1.5">
-                <Loader2 className="w-3 h-3 animate-spin text-[#3399ff]" />
+              <div className="text-[11px] text-muted-foreground truncate flex items-center gap-1.5">
+                <Loader2 className="w-3 h-3 animate-spin text-primary" />
                 {progress?.current_file ? `Translating ${progress.current_file}...` : "Working..."}
               </div>
             </div>
@@ -405,9 +408,9 @@ export const TranslateDialog: React.FC<TranslateDialogProps> = ({
               </Button>
               <Button
                 onClick={handleStart}
-                className="gap-1.5 bg-[#1a8cff] hover:bg-[#0073e6] text-white"
+                className="gap-1.5"
               >
-                <Play className="w-4 h-4 fill-white" />
+                <Play className="w-4 h-4 fill-current" />
                 Start Translation
               </Button>
             </>

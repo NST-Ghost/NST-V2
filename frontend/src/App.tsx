@@ -97,7 +97,7 @@ function AppContent() {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden bg-[#1a1a1a] text-[#f0f0f0]">
+    <div className="h-screen w-screen flex flex-col overflow-hidden bg-background text-foreground">
       <Toaster position="top-right" theme="dark" richColors />
 
       {/* Top Application Menubar */}
