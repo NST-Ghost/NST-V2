@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import {
   EntryService,
 } from "@bindings/nst-go/cmd/nst-desktop";
@@ -240,13 +240,24 @@ export const EditorPage: React.FC<EditorPageProps> = ({
     };
   }, [isResizingBottom]);
 
-  // Filtered files list
-  const filteredFiles = files.filter((f) =>
-    f.path.toLowerCase().includes(fileFilterSearch.toLowerCase())
+  // Filtered files list (memoized)
+  const filteredFiles = useMemo(
+    () =>
+      files.filter((f) =>
+        f.path.toLowerCase().includes(fileFilterSearch.toLowerCase())
+      ),
+    [files, fileFilterSearch]
   );
 
-  const totalAllFiles = files.reduce((acc, f) => acc + f.total, 0);
-  const translatedAllFiles = files.reduce((acc, f) => acc + f.translated, 0);
+  const { totalAllFiles, translatedAllFiles } = useMemo(() => {
+    return files.reduce(
+      (acc, f) => ({
+        totalAllFiles: acc.totalAllFiles + f.total,
+        translatedAllFiles: acc.translatedAllFiles + f.translated,
+      }),
+      { totalAllFiles: 0, translatedAllFiles: 0 }
+    );
+  }, [files]);
 
   return (
     <div className="flex-1 flex flex-row overflow-hidden bg-background">
@@ -434,10 +445,10 @@ export const EditorPage: React.FC<EditorPageProps> = ({
         >
           {/* Header Row */}
           <div className="sticky top-0 z-20 bg-card border-b border-border flex text-xs font-semibold text-muted-foreground select-none h-7 items-center">
-            <div className="w-9 px-2 text-center">#</div>
-            <div className="w-48 px-2 truncate">File & Key</div>
-            <div className="flex-1 px-3 truncate">Original Source</div>
-            <div className="flex-1 px-3 truncate">Target Translation</div>
+            <div className="w-14 px-2 shrink-0 text-center font-mono text-[11px]">#</div>
+            <div className="w-48 px-2 shrink-0 truncate">File & Key</div>
+            <div className="flex-1 min-w-0 px-3 truncate">Original Source</div>
+            <div className="flex-1 min-w-0 px-3 truncate">Target Translation</div>
           </div>
 
           {loading ? (
@@ -478,7 +489,7 @@ export const EditorPage: React.FC<EditorPageProps> = ({
                       height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
                     }}
-                    className={`flex items-center text-xs border-b border-border/50 cursor-pointer transition-colors ${
+                    className={`flex items-center text-xs border-b border-border/50 cursor-pointer transition-colors overflow-hidden ${
                       isSelected
                         ? "bg-primary/20 text-foreground"
                         : virtualRow.index % 2 === 0
@@ -486,36 +497,52 @@ export const EditorPage: React.FC<EditorPageProps> = ({
                         : "bg-background text-foreground hover:bg-muted"
                     }`}
                   >
-                    {/* Status Dot */}
-                    <div className="w-9 px-2 flex items-center justify-center">
+                    {/* Status Dot & Index */}
+                    <div className="w-14 px-2 shrink-0 flex items-center gap-1.5 justify-start">
                       <span
-                        className={`w-2 h-2 rounded-full ${
+                        className={`w-2 h-2 rounded-full shrink-0 ${
                           isTranslated ? "bg-emerald-400" : "bg-destructive"
                         }`}
                         title={isTranslated ? "Translated" : "Untranslated"}
                       />
+                      <span className="font-mono text-[10px] text-muted-foreground truncate">
+                        {page * pageSize + virtualRow.index + 1}
+                      </span>
                     </div>
 
                     {/* Key / File path */}
                     <div
-                      className="w-48 px-2 font-mono text-[11px] text-muted-foreground truncate"
+                      className="w-48 px-2 shrink-0 font-mono text-[11px] text-muted-foreground truncate"
                       title={`${entry.file_path} :: ${entry.key_path}`}
                     >
-                      <span className="text-foreground/80">{entry.file_path}</span>
-                      <span className="text-muted-foreground/60"> : </span>
-                      <span>{entry.key_path}</span>
+                      {selectedFile !== "all" ? (
+                        <span className="text-foreground/90">{entry.key_path}</span>
+                      ) : (
+                        <>
+                          <span className="text-foreground/80">{entry.file_path}</span>
+                          <span className="text-muted-foreground/60"> : </span>
+                          <span>{entry.key_path}</span>
+                        </>
+                      )}
                     </div>
 
-                    {/* Source Text (Clipped with Tokenized formatting) */}
-                    <div className="flex-1 px-3 truncate">
+                    {/* Source Text (Clipped single-line with token formatting) */}
+                    <div
+                      className="flex-1 min-w-0 px-3 overflow-hidden"
+                      title={entry.source}
+                    >
                       <TokenizedText
                         text={entry.source}
                         highlightSearch={debouncedSearch}
+                        singleLine
                       />
                     </div>
 
-                    {/* Target Translation (Inline editable) */}
-                    <div className="flex-1 px-3 truncate">
+                    {/* Target Translation (Inline editable or clipped single-line) */}
+                    <div
+                      className="flex-1 min-w-0 px-3 overflow-hidden"
+                      title={entry.target || ""}
+                    >
                       {isEditing ? (
                         // @ui-allow-native
                         <input
@@ -536,14 +563,15 @@ export const EditorPage: React.FC<EditorPageProps> = ({
                         <span
                           className={
                             (entry.target ?? "").trim()
-                              ? "text-emerald-300 font-mono text-xs"
-                              : "text-muted-foreground/60 italic text-xs"
+                              ? "text-emerald-300 font-mono text-xs block truncate"
+                              : "text-muted-foreground/60 italic text-xs block truncate"
                           }
                         >
                           {(entry.target ?? "").trim() ? (
                             <TokenizedText
                               text={entry.target || ""}
                               highlightSearch={debouncedSearch}
+                              singleLine
                             />
                           ) : (
                             "(untranslated)"
@@ -625,9 +653,14 @@ export const EditorPage: React.FC<EditorPageProps> = ({
             <div className="flex-1 grid grid-cols-2 gap-3 overflow-hidden text-xs">
               {/* Source Box */}
               <div className="flex flex-col bg-background border border-border rounded p-2 overflow-y-auto">
-                <span className="text-[10px] uppercase font-bold text-primary mb-1">
-                  Source (Original)
-                </span>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] uppercase font-bold text-primary">
+                    Source (Original)
+                  </span>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    {activeEntry.source.length} chars
+                  </span>
+                </div>
                 <div className="flex-1 select-text">
                   <TokenizedText
                     text={activeEntry.source}
@@ -642,9 +675,13 @@ export const EditorPage: React.FC<EditorPageProps> = ({
                   <span className="text-[10px] uppercase font-bold text-emerald-400">
                     Target (Translation)
                   </span>
-                  <span className="text-[10px] text-muted-foreground">
-                    Status: {activeEntry.status}
-                  </span>
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                    <span className="font-mono">
+                      {(editingId === activeEntry.id ? editValue : (activeEntry.target || "")).length} chars
+                    </span>
+                    <span>•</span>
+                    <span>Status: {activeEntry.status}</span>
+                  </div>
                 </div>
 
                 <textarea
@@ -672,7 +709,7 @@ export const EditorPage: React.FC<EditorPageProps> = ({
                     }
                   }}
                   placeholder="Type translated text here…"
-                  className="flex-1 bg-transparent text-foreground font-mono text-xs resize-none focus:outline-none placeholder:text-muted-foreground/50"
+                  className="flex-1 bg-transparent text-foreground font-mono text-xs resize-none focus:outline-none placeholder:text-muted-foreground/50 overflow-y-auto"
                 />
               </div>
             </div>

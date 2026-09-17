@@ -78,6 +78,7 @@ func (s *Storage) migrate() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_entries_status ON entries(status);
 	CREATE INDEX IF NOT EXISTS idx_entries_file ON entries(file_path);
+	CREATE INDEX IF NOT EXISTS idx_entries_file_key ON entries(file_path, key_path);
 
 	CREATE TABLE IF NOT EXISTS tm_cache (
 		hash TEXT PRIMARY KEY,

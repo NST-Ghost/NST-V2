@@ -2,29 +2,50 @@ import React from "react";
 
 // Regex matching NST masked tags and common RPG Maker / game escape codes
 const TOKEN_REGEX = /(__NST_TAG_\d+__|\\[A-Za-z]+\[[^\]]*\]|\\[!><|.^$%\\])/g;
+const SINGLE_LINE_TOKEN_REGEX = /(__NST_TAG_\d+__|\\[A-Za-z]+\[[^\]]*\]|\\[!><|.^$%\\]|\r\n|\r|\n)/g;
 
 export interface TokenizedTextProps {
   text: string;
   className?: string;
   highlightSearch?: string;
+  singleLine?: boolean;
 }
 
 export const TokenizedText: React.FC<TokenizedTextProps> = ({
   text,
   className = "",
   highlightSearch = "",
+  singleLine = false,
 }) => {
   if (!text) {
     return <span className="text-muted-foreground italic text-xs">(empty)</span>;
   }
 
   // Split text by tokens while capturing the matches
-  const parts = text.split(TOKEN_REGEX);
+  const regex = singleLine ? SINGLE_LINE_TOKEN_REGEX : TOKEN_REGEX;
+  const parts = text.split(regex);
+
+  const containerClasses = singleLine
+    ? `font-mono text-xs truncate block ${className}`
+    : `font-mono text-xs whitespace-pre-wrap break-words leading-relaxed ${className}`;
 
   return (
-    <span className={`font-mono text-xs whitespace-pre-wrap break-words leading-relaxed ${className}`}>
+    <span className={containerClasses}>
       {parts.map((part, index) => {
         if (!part) return null;
+
+        // In single-line mode, collapse line breaks into a clean badge symbol
+        if (singleLine && (part === "\n" || part === "\r" || part === "\r\n")) {
+          return (
+            <span
+              key={index}
+              className="text-primary/70 font-sans text-[10px] px-0.5 select-none font-bold inline-block"
+              title="Line Break"
+            >
+              ↵{" "}
+            </span>
+          );
+        }
 
         if (part.startsWith("__NST_TAG_") && part.endsWith("__")) {
           return (
@@ -69,3 +90,4 @@ export const TokenizedText: React.FC<TokenizedTextProps> = ({
     </span>
   );
 };
+
